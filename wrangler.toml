@@ -10,8 +10,8 @@ run_worker_first = ["/api/*", "/media/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "signage-db"
-# Replace after: npx wrangler d1 create signage-db
-database_id = "00000000-0000-0000-0000-000000000000"
+# Cloudflare D1 database: signage-db
+database_id = "6178685c-9a4f-4d6f-873c-5a8d45914910"
 
 [[r2_buckets]]
 binding = "MEDIA"
