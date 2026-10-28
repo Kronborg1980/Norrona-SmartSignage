@@ -124,6 +124,7 @@
       lineHeight: String(w.lineHeight == null ? 1.16 : w.lineHeight), letterSpacing: (w.letterSpacing || 0) + 'px', opacity: String(w.opacity == null ? 1 : w.opacity)};
   }
   var widgetMessagesReady = false;
+  function debugEnabled() { return !!(root.location && /(?:^\?|&)debug=1(?:&|$)/.test(root.location.search)); }
   function widgetDiagnostics() {
     if (widgetMessagesReady || !root.addEventListener) return;
     widgetMessagesReady = true;
@@ -160,7 +161,7 @@
   // Runs inside the opaque sandbox. Only host/status is reported, never URLs,
   // request headers, credentials or response bodies. Known weather GETs use the
   // fixed shared cache endpoint; other requests retain their existing behavior.
-  function widgetMonitor(weatherEndpoint) {
+  function widgetMonitor(weatherEndpoint, diagnostics) {
     function weatherRequest(url, method) {
       try {
         var u = new URL(typeof url === 'string' ? url : url.url, document.baseURI), p = u.searchParams;
@@ -181,6 +182,7 @@
       } catch(e) { return null; }
     }
     function report(url, ok, status, weather, getHeader) {
+      if (!diagnostics) return;
       try {
         var host = new URL(typeof url === 'string' ? url : url.url, document.baseURI).host;
         if (host) parent.postMessage({type:'signage-widget-network',host:host,ok:ok,status:status,kind:weather && weather.kind,stale:!!(weather && getHeader && getHeader('X-Signage-Weather-Stale') === '1'),age:weather && getHeader ? Number(getHeader('X-Signage-Weather-Age')) : null}, '*');
@@ -206,14 +208,15 @@
     }
     window.addEventListener('error', function(e) { if (e.target && (e.target.src || e.target.href)) report(e.target.src || e.target.href, false, 0); }, true);
   }
-  function webWidget(w) {
+  function webWidget(w, options) {
+    var diagnostics = !!(options && options.diagnostics === true);
     var frame = document.createElement('iframe');
     frame.setAttribute('sandbox', 'allow-scripts');
     frame.setAttribute('referrerpolicy', 'no-referrer');
     frame.setAttribute('title', w.type === 'html' ? 'Custom HTML widget' : 'Hosted web page widget');
     frame.style.width = '100%'; frame.style.height = '100%'; frame.style.border = '0';
     if (w.type === 'html') {
-      if (w.htmlNetwork === true) { frame.setAttribute('data-signage-widget', ''); widgetDiagnostics(); }
+      if (w.htmlNetwork === true && diagnostics) { frame.setAttribute('data-signage-widget', ''); widgetDiagnostics(); }
       var https = w.htmlNetwork === true ? ' https:' : '';
       // Keep supported library references local, including during offline boot.
       // The saved source is unchanged; only this isolated document is adapted.
@@ -231,7 +234,7 @@
       var fontFiles = new URL('./fonts/', location.href).href;
       var weatherEndpoint = new URL('/api/widget/weather', root.SMARTSIGNAGE_SERVER_URL || location.href).href;
       var policy = "default-src 'none'; script-src 'unsafe-inline' " + vendor + "leaflet.js" + https + "; style-src 'unsafe-inline' " + vendor + "leaflet.css " + fonts + https + "; img-src data: " + vendor + "images/" + https + "; font-src data: " + fontFiles + https + "; media-src data:" + https + "; connect-src " + (https ? 'https: ' + weatherEndpoint : "'none'") + "; frame-src 'none'; base-uri 'none'; form-action 'none'";
-      frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + policy + '"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style>' + (w.htmlNetwork === true ? '<script>(' + widgetMonitor.toString() + ')(' + JSON.stringify(weatherEndpoint).replace(/</g, '\\u003c') + ');</script>' : '') + source;
+      frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + policy + '"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style>' + (w.htmlNetwork === true ? '<script>(' + widgetMonitor.toString() + ')(' + JSON.stringify(weatherEndpoint).replace(/</g, '\\u003c') + ',' + diagnostics + ');</script>' : '') + source;
     } else {
       try { var url = new URL(w.src); if (url.protocol === 'https:' && !url.username && !url.password) frame.src = url.href; } catch (e) {}
     }
@@ -255,7 +258,7 @@
   }
   var core = { activeSchedule: activeSchedule, resolveLayout: resolveLayout, normalizeWidget: normalizeWidget,
     bookingWindow: bookingWindow, pickBooking: pickBooking, resolveWidgets: resolveWidgets,
-    fonts: fonts, widgetStyle: widgetStyle, webWidget: webWidget, widgetNetworkHint: widgetNetworkHint, screenStatus: screenStatus, filterScreens: filterScreens };
+    fonts: fonts, widgetStyle: widgetStyle, webWidget: webWidget, widgetNetworkHint: widgetNetworkHint, debugEnabled: debugEnabled, screenStatus: screenStatus, filterScreens: filterScreens };
   root.SmartSignageCore = core;
   if (typeof module !== 'undefined' && module.exports) module.exports = core;
 })(typeof window !== 'undefined' ? window : globalThis);

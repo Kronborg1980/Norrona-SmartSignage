@@ -6,8 +6,8 @@ var xhr=new XMLHttpRequest();xhr.open('GET','https://data.example.test/vessel');
 // Delay the mock API transport until Playwright has attached to the opaque frame.
 // Match the user's document ordering: external library before its startup code.
 const html=source.replace('<div id="map"','<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script><div id="map"');
-async function preview(page,network){
- await page.goto('/player.html?preview=1');await page.evaluate(({html,network})=>window.postMessage({type:'signage-preview',manifest:{screen:{id:'test',layout_id:'map'},layouts:[{id:'map',widgets:[{id:'map-widget',type:'html',html,htmlNetwork:network,w:1000,h:500}]}],schedules:[]}},location.origin),{html,network});
+async function preview(page,network,debug=false){
+ await page.goto('/player.html?preview=1'+(debug?'&debug=1':''));await page.evaluate(({html,network})=>window.postMessage({type:'signage-preview',manifest:{screen:{id:'test',layout_id:'map'},layouts:[{id:'map',widgets:[{id:'map-widget',type:'html',html,htmlNetwork:network,w:1000,h:500}]}],schedules:[]}},location.origin),{html,network});
 }
 test('Leaflet and Inter load locally before startup, then ship-style XHR can load allowed data',async({page})=>{
  let cdn=0;page.on('request',r=>{if(/unpkg\.com|fonts\.googleapis\.com|fonts\.gstatic\.com/.test(r.url()))cdn++;});
@@ -15,14 +15,17 @@ test('Leaflet and Inter load locally before startup, then ship-style XHR can loa
  await preview(page,true);const frame=page.frameLocator('#stage iframe');await expect(frame.locator('body')).toHaveAttribute('data-library','1.7.1');await expect(frame.locator('.leaflet-container')).toBeVisible();await expect(frame.locator('#ship')).toHaveText('Controlled test vessel');await expect(frame.locator('body')).toHaveAttribute('data-isolated','yes');expect(cdn).toBe(0);
  const fonts=await frame.locator('body').evaluate(async()=>{await document.fonts.load('400 20px Inter');return Array.from(document.fonts).some(f=>f.family==='Inter'&&f.status==='loaded');});expect(fonts).toBe(true);
 });
-test('map library works with live access disabled and player explains the disabled feed',async({page})=>{
- await preview(page,false);const frame=page.frameLocator('#stage iframe');await expect(frame.locator('body')).toHaveAttribute('data-library','1.7.1');await expect(page.locator('.widget-network-hint')).toContainText('External HTTPS is disabled');await expect(frame.locator('#ship')).toHaveText('Waiting');
+test('map library works with live access disabled and debug mode explains the disabled feed',async({page})=>{
+ await preview(page,false,true);const frame=page.frameLocator('#stage iframe');await expect(frame.locator('body')).toHaveAttribute('data-library','1.7.1');await expect(page.locator('.widget-network-hint')).toContainText('External HTTPS is disabled');await expect(frame.locator('#ship')).toHaveText('Waiting');
+});
+test('normal playback keeps a disabled-network diagnostic off the screen',async({page})=>{
+ await preview(page,false);await expect(page.frameLocator('#stage iframe').locator('body')).toHaveAttribute('data-library','1.7.1');await expect(page.locator('.widget-network-hint,.widget-runtime-hint')).toHaveCount(0);
 });
 
 test('network failures show only host/status and clear after a successful retry',async({page})=>{
  let fail=true;
  await page.context().route('https://data.example.test/**',r=>r.fulfill({status:fail?403:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify({name:'Recovered vessel'})}));
- await preview(page,true);await expect(page.locator('.widget-runtime-hint')).toContainText('data.example.test (HTTP 403)');
+ await preview(page,true,true);await expect(page.locator('.widget-runtime-hint')).toContainText('data.example.test (HTTP 403)');
  expect(await page.locator('.widget-runtime-hint').textContent()).not.toContain('/vessel');
  fail=false;
  await page.frameLocator('#stage iframe').locator('body').evaluate(()=>{var retry=new XMLHttpRequest();retry.open('GET','https://data.example.test/vessel?token=not-for-display');retry.send();});

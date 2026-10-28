@@ -2,7 +2,7 @@
 
 ## Latest bug review
 
-**54 Node tests and 24 Chromium tests pass**, including 100 concurrent channel players in local Wrangler D1/R2, the existing 100-player fleet waves, weather request coalescing and corrupt/incomplete-manifest rejection. Worker deployment dry-run, syntax and whitespace checks pass. The prior dependency audit reported **0 known vulnerabilities** in the installed lockfile.
+**54 Node tests and 26 Chromium tests pass**, including 100 concurrent channel players in local Wrangler D1/R2, the existing 100-player fleet waves, weather request coalescing and corrupt/incomplete-manifest rejection. Syntax and whitespace checks pass. The prior Worker deployment dry-run passed; this update changes browser assets only. The prior dependency audit reported **0 known vulnerabilities** in the installed lockfile.
 
 The review fixed concurrency errors in pairing/login, editor data corruption, offline integrity/state recovery, portrait geometry, schedule-target changes, SQL parameter limits and smaller API/tooling defects. See [the detailed review](REVIEW_2026-10-28.md), which also records unresolved fetch-timeout, cache-cleanup, pairing-persistence and screen-rotation issues. These remain limitations; the system is not certified for shipboard production.
 
@@ -80,3 +80,9 @@ Network-enabled inline widgets now adapt those three known GET queries to a fixe
 Tests use controlled upstream responses; real provider quota and Cloudflare caching behavior remain unverified here. Cache API results/cooldowns are local to a data centre and may be evicted. This is not a guarantee of global provider quota compliance, a provider subscription, or persistent per-screen offline weather. Quota/plan suitability still needs verification before fleet rollout.
 
 Weather validation also covers host-wide 429 backoff, numeric/date Retry-After values, stale-result age/expiry, fixed profiles, rejected arbitrary/duplicate query parameters, malformed/oversized responses, an eight-second timeout, sandbox isolation and independent wind/temperature diagnostics. The exact pasted widget passed a private browser run through the new endpoint with controlled ship/weather data and no console/page errors. Live production weather and regional/global Cloudflare cache behavior are not certified by these tests.
+
+## Diagnostic banners are opt-in
+
+Normal player playback, backoffice Preview and the editor canvas no longer cover content with network, HTTP 429, cached-weather or disabled-network diagnostic banners. An explicit `debug=1` query parameter enables those overlays; `debug=10` or a `?debug=1` string embedded inside another parameter does not. Editor Inspector guidance remains available. Network-enabled HTML widgets still use the same isolated renderer, local libraries and shared weather cache/retry transport. Normal-mode widget monitoring does not post diagnostic messages or read diagnostic response headers. The user-provided HTML is not rewritten to hide its own authored elements.
+
+Two additional Chromium regressions cover clean disabled-network playback and normal-mode 429/stale responses without losing shared weather transport. Existing debug-mode tests still verify failure/recovery messages, source checks, isolation and independent weather diagnostics. Use `/player.html` without `?debug=1` for normal display links. The shell cache version is updated to refresh browser assets.
