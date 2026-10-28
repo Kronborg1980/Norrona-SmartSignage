@@ -69,7 +69,8 @@ function render(){if(!active){show('pair-screen');return;}
  layout.widgets.slice().sort((a,b)=>a.z-b.z).forEach(function(input){
   var w=core.normalizeWidget(input,layout.orientation),elem=create('div','widget');
   Object.assign(elem.style,{left:w.x+'px',top:w.y+'px',width:w.w+'px',height:w.h+'px',zIndex:String(w.z),color:w.color,background:w.background,borderRadius:w.radius+'px',fontSize:w.fontSize+'px',textAlign:w.align});
-  if(w.type==='text'){
+  if(w.type==='html'||w.type==='webpage'){elem.append(core.webWidget(w));
+  }else if(w.type==='text'){
    var t=create('div','text',w.text);t.style.justifyContent=w.align==='center'?'center':w.align==='right'?'flex-end':'flex-start';elem.append(t);
   }else if(w.type==='clock'){
    var t=create('div','clock');elem.append(t);t.style.justifyContent='center';

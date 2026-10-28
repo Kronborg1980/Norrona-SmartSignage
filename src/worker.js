@@ -29,13 +29,18 @@ function validateWidgets(input,orientation='landscape') {
  const [width,height]=orientation==='portrait'?[1080,1920]:[1920,1080];
  let videos=0;
  return input.map((w,i)=>{
-  if(!['text','clock','image','video','ticker'].includes(w.type))throw new Error('Unknown widget');
+  if(!['text','clock','image','video','ticker','html','webpage'].includes(w.type))throw new Error('Unknown widget');
   if(w.type==='video'&&++videos>1)throw new Error('Only one video per layout on Tizen');
   if(['image','video'].includes(w.type)&&w.src&&!allowedUrl(w.src))throw new Error('Media URL must be HTTPS or hosted library media');
+  if(w.type==='html'&&(typeof w.html!=='string'||w.html.length>20000))throw new Error('HTML code must be a string of at most 20000 characters');
+  if(w.type==='html'&&/<\?(?:php|=)/i.test(w.html))throw new Error('PHP runs on a server. Use a Web page widget with the hosted HTTPS URL.');
+  if(w.type==='webpage'){
+   try{const u=new URL(w.src);if(u.protocol!=='https:'||u.username||u.password)throw Error();}catch{throw new Error('Web page widgets require an HTTPS URL without credentials');}
+  }
   const clamp=(v,a,b,def)=>Number.isFinite(Number(v))?Math.max(a,Math.min(b,Number(v))):def;
   return {id:/^[a-zA-Z0-9_-]{3,50}$/.test(w.id||'')?w.id:rand(8),type:w.type,
    x:clamp(w.x,0,width,0),y:clamp(w.y,0,height,0),w:clamp(w.w,20,width,400),h:clamp(w.h,20,height,150),z:clamp(w.z,0,999,i),
-   text:name(w.text,2000),src:allowedUrl(w.src)?w.src:'',color:color(w.color)||'#ffffff',background:w.background==='transparent'?'transparent':color(w.background),
+   html:w.type==='html'?w.html:'',text:name(w.text,2000),src:w.type==='webpage'?new URL(w.src).href:allowedUrl(w.src)?w.src:'',color:color(w.color)||'#ffffff',background:w.background==='transparent'?'transparent':color(w.background),
    fontSize:clamp(w.fontSize,10,300,48),align:['left','center','right'].includes(w.align)?w.align:'left',fit:['cover','contain'].includes(w.fit)?w.fit:'contain',radius:clamp(w.radius,0,200,0),speed:clamp(w.speed,5,180,40)};
  });
 }

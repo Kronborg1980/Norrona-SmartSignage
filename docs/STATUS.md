@@ -2,7 +2,7 @@
 
 ## Latest bug review
 
-**30 Node tests and 11 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
+**32 Node tests and 12 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
 
 The review fixed concurrency errors in pairing/login, editor data corruption, offline integrity/state recovery, portrait geometry, schedule-target changes, SQL parameter limits and smaller API/tooling defects. See [the detailed review](REVIEW_2026-10-28.md), which also records unresolved fetch-timeout, cache-cleanup, pairing-persistence and screen-rotation issues. These remain limitations; the system is not certified for shipboard production.
 
@@ -48,3 +48,7 @@ Screens now includes Preview for each display, using the actual player renderer 
 ## Media resizing
 
 Layout Studio supports four corner resize handles, explicit Width/Height, contain/cover scaling, and Fill canvas. New media layers default to contain. Four Chromium tests verify image/video resizing and persistence in landscape/portrait, top-left anchoring, minimum dimensions, and fit mode. Existing saved crop settings are preserved.
+
+## HTML and hosted-page widgets
+
+Layout Studio now supports HTML/CSS/JavaScript code and hosted HTTPS page widgets (including server-rendered PHP). Sandboxed iframes isolate scripts from application storage; inline widgets block external requests. Node tests cover validation and manifest persistence, and Chromium checks code execution, isolation, editor/player preview, hosted-page iframe configuration and offline reload of saved HTML. No PHP runtime or ZIP installer is added; hosted pages require network and permission to embed.

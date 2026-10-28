@@ -52,6 +52,14 @@ Run automated tests:
 npm test
 ```
 
+## Custom HTML and hosted web widgets
+
+In Layout Studio choose **HTML code**, paste HTML with inline CSS/JavaScript in Inspector, and click **Update code preview**. Resize/move it like other layers, then **Save layout**. Up to 20,000 code characters per widget are supported within the layout request limit. Self-contained code is stored with the manifest and works offline after a successful sync. Embedded data images/fonts/media are supported; external requests, scripts, stylesheets, nested frames and forms are blocked by the HTML widget policy. Widget scripts cannot access backoffice/player storage or navigate the top-level page.
+
+For an existing site or server-rendered PHP output, choose **Web page** and enter its hosted **HTTPS URL**. PHP is not executed by a browser or this Worker; PHP source pasted into an HTML widget is rejected with guidance to use a hosted URL. Hosted pages require network access and must permit sandboxed iframe embedding; sites with blocking frame policies or login-dependent functionality may not work. Do not put credentials in widget URLs. Hosted pages are not cached for offline playback.
+
+Both modes use a sandboxed iframe without same-origin access in editor, backoffice Preview and player. No database migration is required. Physical Tizen/browser compatibility still needs device testing; existing packaged players need the updated application files to render the new widget types.
+
 ## Resize images and videos
 
 In Layout Studio, select a layer and drag its blue corner handles to resize it, or enter exact **Width** and **Height** values in Inspector. Drag the middle to move it. **Media scaling → Show whole media** preserves the full image/video inside the box; **Fill and crop** fills the box while cropping edges. **Fill canvas** expands the box to the selected landscape/portrait canvas. Click **Save layout** to publish the change to assigned displays.
@@ -122,7 +130,7 @@ See the [28 October code review](docs/REVIEW_2026-10-28.md) for corrected defect
 - Cloudflare deployment is reported by the user; this update is validated locally. No physical Tizen validation or signed `.wgt` is documented.
 - Admin is currently single-password, not multi-user RBAC. Production requires identities, role management and audit write coverage.
 - Media library only supports JPG/PNG/WebP/GIF and MP4 up to **25 MB**. Larger videos require multipart upload/transcoding and local distribution.
-- HTML5 arbitrary widgets, weather, ship location/speed, PDF/PPTX, campaign playlists, remote screenshot/reboot, and synchronized multi-display playback are **not implemented yet**.
+- ZIP widget packages, weather, ship location/speed, PDF/PPTX, campaign playlists, remote screenshot/reboot, and synchronized multi-display playback are **not implemented yet**. Custom inline HTML and hosted web-page widgets are available as described above.
 - When offline, only **pre-cached `/media/` assets** are expected to work; external HTTPS images/videos require network. Device CacheStorage may be evicted or have quota limits.
 - Scheduling uses **UTC**, not ship-local time. Choosing whether the ship uses Tórshavn, UTC or zone transitions is a separate product decision.
 - No LAN mirror or local server aboard yet. A shipboard CDN/distribution node is recommended for 50–100 screens and large videos.

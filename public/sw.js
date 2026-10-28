@@ -1,6 +1,6 @@
 /* Cache application shell on Tizen browsers which support service workers.
    The player itself controls atomic media/manifest activation. */
-var CACHE='signage-shell-20261028-3';
+var CACHE='signage-shell-20261028-4';
 var SHELL=['/player.html','/player.css','/player.js','/shared.js','/player-config.js'];
 self.addEventListener('install',function(e){e.waitUntil(caches.open(CACHE).then(function(c){return c.addAll(SHELL);}));self.skipWaiting();});
 self.addEventListener('activate',function(e){e.waitUntil(caches.keys().then(function(keys){return Promise.all(keys.filter(function(k){return k.indexOf('signage-shell-')===0&&k!==CACHE;}).map(function(k){return caches.delete(k);}));}));self.clients.claim();});

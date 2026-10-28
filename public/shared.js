@@ -44,13 +44,26 @@
       w: Math.max(20, Math.min(width, Number(w.w) || 400)),
       h: Math.max(20, Math.min(height, Number(w.h) || 150)),
       z: Math.max(0, Math.min(999, Number(w.z) || 0)),
-      text: String(w.text || ''), src: String(w.src || ''),
+      html: String(w.html || ''), text: String(w.text || ''), src: String(w.src || ''),
       color: String(w.color || '#ffffff'), background: String(w.background || 'transparent'),
       fontSize: Math.max(10, Math.min(300, Number(w.fontSize) || 48)),
       align: String(w.align || 'left'), fit: String(w.fit || 'contain'),
       radius: Math.max(0, Math.min(200, Number(w.radius) || 0)),
       speed: Math.max(5, Math.min(180, Number(w.speed) || 40))
     };
+  }
+  function webWidget(w) {
+    var frame = document.createElement('iframe');
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
+    frame.setAttribute('title', w.type === 'html' ? 'Custom HTML widget' : 'Hosted web page widget');
+    frame.style.width = '100%'; frame.style.height = '100%'; frame.style.border = '0';
+    if (w.type === 'html') {
+      frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data:; font-src data:; media-src data:; connect-src \'none\'; frame-src \'none\'; base-uri \'none\'; form-action \'none\'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style>' + String(w.html || '');
+    } else {
+      try { var url = new URL(w.src); if (url.protocol === 'https:' && !url.username && !url.password) frame.src = url.href; } catch (e) {}
+    }
+    return frame;
   }
   function screenStatus(screen, at) {
     if (!screen.enabled) return 'Disabled';
@@ -66,7 +79,7 @@
     });
   }
   var core = { activeSchedule: activeSchedule, resolveLayout: resolveLayout, normalizeWidget: normalizeWidget,
-    screenStatus: screenStatus, filterScreens: filterScreens };
+    webWidget: webWidget, screenStatus: screenStatus, filterScreens: filterScreens };
   root.SmartSignageCore = core;
   if (typeof module !== 'undefined' && module.exports) module.exports = core;
 })(typeof window !== 'undefined' ? window : globalThis);
