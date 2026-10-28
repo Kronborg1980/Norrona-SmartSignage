@@ -1,0 +1,5 @@
+# Public, versioned font/library assets are also used by opaque sandboxed frames.
+/fonts/*
+  Access-Control-Allow-Origin: *
+/vendor/*
+  Access-Control-Allow-Origin: *

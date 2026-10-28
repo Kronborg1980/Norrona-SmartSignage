@@ -70,7 +70,7 @@ function render(){if(!active){show('pair-screen');return;}
   var w=core.normalizeWidget(input,layout.orientation),elem=create('div','widget');
   Object.assign(elem.style,{left:w.x+'px',top:w.y+'px',width:w.w+'px',height:w.h+'px',zIndex:String(w.z),color:w.color,background:w.background,borderRadius:w.radius+'px',fontSize:w.fontSize+'px',textAlign:w.align});
   Object.assign(elem.style,core.widgetStyle(w));
-  if(w.type==='html'||w.type==='webpage'){elem.append(core.webWidget(w));
+  if(w.type==='html'||w.type==='webpage'){elem.append(core.webWidget(w));var warning=core.widgetNetworkHint(w);if(warning)elem.append(create('div','widget-network-hint',warning));
   }else if(w.type==='text'){
    var t=create('div','text',w.text);t.style.lineHeight='inherit';t.style.alignItems=w.verticalAlign==='top'?'flex-start':w.verticalAlign==='bottom'?'flex-end':'center';t.style.justifyContent=w.align==='center'?'center':w.align==='right'?'flex-end':'flex-start';elem.append(t);
   }else if(w.type==='clock'){

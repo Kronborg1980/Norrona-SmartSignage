@@ -126,7 +126,8 @@ function renderInspector(){var c=$('inspector');clear(c);var w=editing.widgets.f
   var size=el('p',{class:'muted','aria-live':'polite'});
   function codeSize(){var bytes=new TextEncoder().encode(code.value).byteLength;size.textContent=(bytes/1024).toFixed(1)+' / 512 KiB';size.classList.toggle('error',bytes>512*1024);}
   code.oninput=()=>{w.html=code.value;codeSize();};codeSize();c.append(labeled('HTML / CSS / JavaScript code',code),size);
-  var network=el('input',{type:'checkbox','aria-label':'Allow external HTTPS resources'});network.checked=w.htmlNetwork===true;network.onchange=()=>{w.htmlNetwork=network.checked;renderCanvas();};c.append(el('label',{class:'checkline'},[network,' Allow external HTTPS resources']));
+  var network=el('input',{type:'checkbox','aria-label':'Allow external HTTPS resources'});network.checked=w.htmlNetwork===true;network.onchange=()=>{w.htmlNetwork=network.checked;renderCanvas();renderInspector();};c.append(el('label',{class:'checkline'},[network,' Allow external HTTPS resources']));
+  if(core.widgetNetworkHint(w))c.append(el('p',{class:'hint',text:core.widgetNetworkHint(w)}));
   c.append(el('p',{class:'muted',text:'HTML limit: 512 KiB; layout request: 1 MiB. Enable external HTTPS resources for libraries, fonts and live APIs. Network access requires connectivity and the API’s CORS permission. PHP needs a hosted server.'}));
   c.append(el('button',{class:'secondary',text:'Update code preview',onclick:()=>renderCanvas()}));
  }

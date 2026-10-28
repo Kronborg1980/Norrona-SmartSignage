@@ -1,0 +1,6 @@
+{
+  "package": "leaflet",
+  "version": "1.7.1",
+  "source": "https://www.npmjs.com/package/leaflet/v/1.7.1",
+  "local_changes": "CSS and license line endings/trailing whitespace normalized; runtime JavaScript unchanged."
+}

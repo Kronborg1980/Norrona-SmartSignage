@@ -2,7 +2,7 @@
 
 ## Latest bug review
 
-**36 Node tests and 15 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
+**37 Node tests and 19 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
 
 The review fixed concurrency errors in pairing/login, editor data corruption, offline integrity/state recovery, portrait geometry, schedule-target changes, SQL parameter limits and smaller API/tooling defects. See [the detailed review](REVIEW_2026-10-28.md), which also records unresolved fetch-timeout, cache-cleanup, pairing-persistence and screen-rotation issues. These remain limitations; the system is not certified for shipboard production.
 
@@ -62,3 +62,9 @@ Added 18 font choices with 8 fonts bundled for offline use (licenses and source 
 HTML source now supports 512 KiB UTF-8 per widget; layout POSTs accept up to 1 MiB, with bounded streaming reads and clear errors. Other JSON endpoints keep a 250,000-byte limit. The user-provided 274,999-byte widget saved and round-tripped exactly in an isolated SQLite API check; its source is not copied into the repository. A browser regression exercises a 280 KB layout and explicit external HTTPS permission, while preserving sandbox storage isolation. Live external API access/CORS has not been verified here.
 
 The accepted bookings/channel model (whole-layout or fullscreen content on screens, content bookings inside channels) is documented in BOOKING_CHANNEL_MODEL.md; this release does not implement that redesign.
+
+## Map-widget startup fix
+
+Leaflet 1.7.1 JS/CSS/images are bundled with the BSD license and resolved locally from supported unpkg URLs without changing saved source. Known Inter Google Fonts stylesheet references use the local font bundle. Static font/vendor assets permit CORS for opaque sandboxed frames. A generated local bundle is loaded by the parent application and embeds supported library code/CSS/images/fonts into the sandboxed document; this fixes unreliable iframe access to the parent service-worker cache. The bundle is cached for offline player boot and copied to the Tizen source bundle. Live networking remains opt-in; disabled access and failed host/status are visible, with source-checked iframe messages and no credential/URL logging.
+
+The original pasted widget was tested privately (not committed): its map initialized, issued the vessel request, and updated speed/destination/weather using controlled API responses. The final private run reported no browser errors. Four committed browser regressions cover real Leaflet initialization, XHR data, font loading, failure/recovery diagnostics, iframe message source checks and offline map reload. Actual remote ship/weather API reachability and CORS permissions remain unverified from this environment.

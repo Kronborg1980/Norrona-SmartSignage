@@ -63,6 +63,47 @@
       fontWeight: w.bold ? '700' : '400', fontStyle: w.italic ? 'italic' : 'normal', textDecoration: w.underline ? 'underline' : 'none',
       lineHeight: String(w.lineHeight == null ? 1.16 : w.lineHeight), letterSpacing: (w.letterSpacing || 0) + 'px', opacity: String(w.opacity == null ? 1 : w.opacity)};
   }
+  var widgetMessagesReady = false;
+  function widgetDiagnostics() {
+    if (widgetMessagesReady || !root.addEventListener) return;
+    widgetMessagesReady = true;
+    root.addEventListener('message', function(e) {
+      var data = e.data;
+      if (!data || data.type !== 'signage-widget-network' || typeof data.host !== 'string' || !/^[a-z0-9.:-]{1,160}$/i.test(data.host)) return;
+      var frames = document.querySelectorAll('iframe[data-signage-widget]');
+      for (var i = 0; i < frames.length; i++) {
+        if (frames[i].contentWindow !== e.source) continue;
+        var box = frames[i].parentElement, note = box.querySelector('.widget-runtime-hint');
+        if (data.ok === true) { if (note && note.getAttribute('data-host') === data.host) note.remove(); return; }
+        if (!note) {
+          note = document.createElement('div'); note.className = 'widget-runtime-hint';
+          note.style.cssText = 'position:absolute;left:0;right:0;bottom:0;padding:8px;background:#600e;font:14px Arial,sans-serif;color:white;z-index:2147483647;pointer-events:none';
+          box.appendChild(note);
+        }
+        note.setAttribute('data-host', data.host);
+        note.textContent = 'Widget connection failed: ' + data.host + (Number.isInteger(data.status) && data.status >= 400 && data.status <= 599 ? ' (HTTP ' + data.status + ')' : ' (network or CORS).');
+        return;
+      }
+    });
+  }
+  // Runs inside the opaque sandbox. Only host/status is reported, never URLs,
+  // request headers, credentials or response bodies. Request behavior is retained.
+  function widgetMonitor() {
+    function report(url, ok, status) {
+      try { var host = new URL(typeof url === 'string' ? url : url.url, document.baseURI).host; if (host) parent.postMessage({type:'signage-widget-network',host:host,ok:ok,status:status}, '*'); } catch(e) {}
+    }
+    var open = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function() {
+      var url = arguments[1], result = open.apply(this, arguments);
+      this.addEventListener('loadend', function() { report(url, this.status >= 200 && this.status < 400, this.status); });
+      return result;
+    };
+    if (window.fetch) {
+      var fetch = window.fetch;
+      window.fetch = function() { var url = arguments[0]; return fetch.apply(this, arguments).then(function(r) { report(url, r.ok, r.status); return r; }, function(e) { report(url, false, 0); throw e; }); };
+    }
+    window.addEventListener('error', function(e) { if (e.target && (e.target.src || e.target.href)) report(e.target.src || e.target.href, false, 0); }, true);
+  }
   function webWidget(w) {
     var frame = document.createElement('iframe');
     frame.setAttribute('sandbox', 'allow-scripts');
@@ -70,13 +111,31 @@
     frame.setAttribute('title', w.type === 'html' ? 'Custom HTML widget' : 'Hosted web page widget');
     frame.style.width = '100%'; frame.style.height = '100%'; frame.style.border = '0';
     if (w.type === 'html') {
+      if (w.htmlNetwork === true) { frame.setAttribute('data-signage-widget', ''); widgetDiagnostics(); }
       var https = w.htmlNetwork === true ? ' https:' : '';
-      var policy = "default-src 'none'; script-src 'unsafe-inline'" + https + "; style-src 'unsafe-inline'" + https + "; img-src data:" + https + "; font-src data:" + https + "; media-src data:" + https + "; connect-src " + (https ? 'https:' : "'none'") + "; frame-src 'none'; base-uri 'none'; form-action 'none'";
-      frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + policy + '"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style>' + String(w.html || '');
+      // Keep supported library references local, including during offline boot.
+      // The saved source is unchanged; only this isolated document is adapted.
+      var vendor = new URL('./vendor/leaflet-1.7.1/', location.href).href;
+      var source = String(w.html || '').replace(/https:\/\/unpkg\.com\/leaflet@1\.7\.1\/dist\/(leaflet\.(?:js|css))/g, function(_, file) { return vendor + file; });
+      var fonts = new URL('./fonts.css', location.href).href;
+      source = source.replace(/https:\/\/fonts\.googleapis\.com\/css2\?family=Inter:[^"'<>]+/g, fonts);
+      var built = root.SmartSignageWidgetAssets;
+      if (built) {
+        var inlineJs = built.leafletJs.replace(/<\/script/gi, '<\\/script');
+        source = source.replace(/<script\b[^>]*\bsrc\s*=\s*["']([^"']*\/vendor\/leaflet-1\.7\.1\/leaflet\.js)["'][^>]*>\s*<\/script\s*>/gi, function() { return '<script>' + inlineJs + '</script>'; });
+        source = source.replace(/<link\b[^>]*\bhref\s*=\s*["'][^"']*\/vendor\/leaflet-1\.7\.1\/leaflet\.css["'][^>]*>/gi, function() { return '<style>' + built.leafletCss + '</style>'; });
+        source = source.replace(/<link\b[^>]*\bhref\s*=\s*["'][^"']*\/fonts\.css["'][^>]*>/gi, function() { return '<style>' + built.interCss + '</style>'; });
+      }
+      var fontFiles = new URL('./fonts/', location.href).href;
+      var policy = "default-src 'none'; script-src 'unsafe-inline' " + vendor + "leaflet.js" + https + "; style-src 'unsafe-inline' " + vendor + "leaflet.css " + fonts + https + "; img-src data: " + vendor + "images/" + https + "; font-src data: " + fontFiles + https + "; media-src data:" + https + "; connect-src " + (https ? 'https:' : "'none'") + "; frame-src 'none'; base-uri 'none'; form-action 'none'";
+      frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + policy + '"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style>' + (w.htmlNetwork === true ? '<script>(' + widgetMonitor.toString() + ')();</script>' : '') + source;
     } else {
       try { var url = new URL(w.src); if (url.protocol === 'https:' && !url.username && !url.password) frame.src = url.href; } catch (e) {}
     }
     return frame;
+  }
+  function widgetNetworkHint(w) {
+    return w.type === 'html' && !w.htmlNetwork && /https:\/\//i.test(w.html || '') ? 'External HTTPS is disabled. Enable it in Layout Studio and save to load live data.' : '';
   }
   function screenStatus(screen, at) {
     if (!screen.enabled) return 'Disabled';
@@ -92,7 +151,7 @@
     });
   }
   var core = { activeSchedule: activeSchedule, resolveLayout: resolveLayout, normalizeWidget: normalizeWidget,
-    fonts: fonts, widgetStyle: widgetStyle, webWidget: webWidget, screenStatus: screenStatus, filterScreens: filterScreens };
+    fonts: fonts, widgetStyle: widgetStyle, webWidget: webWidget, widgetNetworkHint: widgetNetworkHint, screenStatus: screenStatus, filterScreens: filterScreens };
   root.SmartSignageCore = core;
   if (typeof module !== 'undefined' && module.exports) module.exports = core;
 })(typeof window !== 'undefined' ? window : globalThis);

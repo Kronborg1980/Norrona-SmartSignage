@@ -68,6 +68,12 @@ For an existing site or server-rendered PHP output, choose **Web page** and ente
 
 Both modes use a sandboxed iframe without same-origin access in editor, backoffice Preview and player. No database migration is required. Physical Tizen/browser compatibility still needs device testing; existing packaged players need the updated application files to render the new widget types.
 
+## Map-widget libraries and connection status
+
+HTML source references to the user's Leaflet 1.7.1 URLs at `https://unpkg.com/leaflet@1.7.1/dist/leaflet.js` and `.css` are resolved to a bundled, licensed copy at render time. Inter Google Fonts stylesheet references are resolved to the existing local font bundle. The saved HTML remains unchanged. A generated local `widget-assets.js` bundle supplies the library code, CSS, marker images and Inter fonts directly inside the isolated document. This avoids relying on a sandboxed iframe accessing the parent service-worker cache. The bundle is included in the browser offline shell and Tizen source bundle, so library startup no longer depends on those CDNs. Regenerate it with `node scripts/build-widget-assets.mjs` after changing the pinned vendor/font assets.
+
+Live ship/weather/API data still requires **Allow external HTTPS resources** to be enabled and the layout saved. A visible note identifies disabled live access. Network-enabled widgets report failed script/style requests, fetch and XMLHttpRequest connections as a host/status message in their widget area; it clears when that host recovers. Only host/status is sent to the parent, never request URLs, credentials, headers or response data; messages are accepted only from the widget's own iframe. This does not bypass CORS or provide a public fetch proxy.
+
 ## Resize images and videos
 
 In Layout Studio, select a layer and drag its blue corner handles to resize it, or enter exact **Width** and **Height** values in Inspector. Drag the middle to move it. **Media scaling → Show whole media** preserves the full image/video inside the box; **Fill and crop** fills the box while cropping edges. **Fill canvas** expands the box to the selected landscape/portrait canvas. Click **Save layout** to publish the change to assigned displays.
