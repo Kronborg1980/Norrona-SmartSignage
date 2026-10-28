@@ -24,4 +24,3 @@ export async function request(env,url,method='GET',body,token='',extra={}){
  if(body!==undefined&&body!==null&&!(body instanceof Uint8Array)&&typeof body!=='string'){payload=JSON.stringify(body);headers['Content-Type']='application/json';}
  return worker.fetch(new Request('https://norrona.test'+url,{method,headers,body:payload===undefined?undefined:payload}),env);
 }
-
