@@ -24,6 +24,19 @@
   }
   function resolveLayout(manifest, at) {
     if (!manifest || !manifest.screen) return null;
+    var booking = pickBooking(manifest, 'screen', manifest.screen.id, at);
+    if (booking) {
+      if (booking.item_type === 'layout') {
+        var bookedLayouts = manifest.layouts || [];
+        for (var bi = 0; bi < bookedLayouts.length; bi++) if (bookedLayouts[bi].id === booking.item_id) return bookedLayouts[bi];
+      } else {
+        var item = findContent(manifest, booking.item_id);
+        if (item) {
+          var portrait = manifest.screen.orientation === 'portrait';
+          return {id:'booking:' + booking.id + ':' + item.version,orientation:portrait ? 'portrait' : 'landscape',background:'#071220',widgets:[Object.assign({}, item.widget, {id:'fullscreen:' + booking.id,x:0,y:0,w:portrait ? 1080 : 1920,h:portrait ? 1920 : 1080,z:0})]};
+        }
+      }
+    }
     var active = (manifest.schedules || []).filter(function (s) {
       return activeSchedule(s, manifest.screen, at);
     });
@@ -33,12 +46,59 @@
     for (var i = 0; i < layouts.length; i++) if (layouts[i].id === id) return layouts[i];
     return null;
   }
+  // Date/weekday belongs to the start of an overnight window. The end minute
+  // is inclusive, as in the existing UTC schedule contract.
+  function bookingWindow(b, at) {
+    var d = new Date(at), ms = d.getTime();
+    if (!b.enabled || !isFinite(ms)) return null;
+    var a = String(b.start_time || '00:00').split(':'), z = String(b.end_time || '23:59').split(':');
+    var begin = Number(a[0]) * 60 + Number(a[1]), end = Number(z[0]) * 60 + Number(z[1]);
+    var mins = d.getUTCHours() * 60 + d.getUTCMinutes(), day = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    if (begin <= end) { if (mins < begin || mins > end) return null; }
+    else if (mins <= end) day -= 86400000;
+    else if (mins < begin) return null;
+    var anchor = new Date(day), date = anchor.toISOString().slice(0,10);
+    if ((b.days || []).indexOf(anchor.getUTCDay()) < 0 || b.start_date && date < b.start_date || b.end_date && date > b.end_date) return null;
+    return day + begin * 60000;
+  }
+  function findContent(manifest, id) {
+    var items = manifest.content || [];
+    for (var i = 0; i < items.length; i++) if (items[i].id === id) return items[i];
+    return null;
+  }
+  function pickBooking(manifest, scope, target, at) {
+    var screen = manifest.screen || {}, instant = new Date(at).getTime();
+    var pool = (manifest.bookings || []).filter(function(b) {
+      if (scope === 'channel' ? b.scope !== 'channel' || b.target !== target : !(b.scope === 'all' || b.scope === 'screen' && b.target === screen.id || b.scope === 'zone' && b.target === screen.zone)) return false;
+      return bookingWindow(b, at) !== null;
+    });
+    if (!pool.length) return null;
+    function specificity(b) { return b.scope === 'screen' ? 2 : b.scope === 'zone' ? 1 : 0; }
+    pool.sort(function(a,b) { return b.priority - a.priority || specificity(b) - specificity(a) || a.position - b.position || a.id.localeCompare(b.id); });
+    var first = pool[0];pool = pool.filter(function(b) { return b.priority === first.priority && specificity(b) === specificity(first); });
+    var anchor = pool.reduce(function(min,b) { return Math.min(min,bookingWindow(b,at)); },Infinity);
+    var total = pool.reduce(function(sum,b) { return sum + Math.max(1, Number(b.duration) || 10); },0);
+    var cursor = ((instant - anchor) / 1000 % total + total) % total;
+    for (var i = 0; i < pool.length; i++) { cursor -= Math.max(1, Number(pool[i].duration) || 10); if (cursor < 0) return pool[i]; }
+    return first;
+  }
+  function resolveWidgets(layout, manifest, at) {
+    return (layout.widgets || []).map(function(area) {
+      if (area.type !== 'channel') return {key:area.id,widget:area};
+      var b = pickBooking(manifest,'channel',area.channel_id,at), item = b && findContent(manifest,b.item_id);
+      if (!item) return {key:area.id + ':empty',widget:Object.assign({},area,{type:'empty'})};
+      var w = Object.assign({}, item.widget, {id:area.id,x:area.x,y:area.y,w:area.w,h:area.h,z:area.z,radius:area.radius || 0,opacity:(area.opacity == null ? 1 : area.opacity) * (item.widget.opacity == null ? 1 : item.widget.opacity)});
+      if (w.background === 'transparent' || !w.background) w.background = area.background || 'transparent';
+      return {key:area.id + ':' + b.id + ':' + item.version,widget:w};
+    });
+  }
   function normalizeWidget(w, orientation) {
     w = w || {};
     var width = orientation === 'portrait' ? 1080 : 1920;
     var height = orientation === 'portrait' ? 1920 : 1080;
     return {
       id: String(w.id || ''), type: String(w.type || 'text'),
+      channel_id: String(w.channel_id || ''),
       x: Math.max(0, Math.min(width, Number(w.x) || 0)),
       y: Math.max(0, Math.min(height, Number(w.y) || 0)),
       w: Math.max(20, Math.min(width, Number(w.w) || 400)),
@@ -194,6 +254,7 @@
     });
   }
   var core = { activeSchedule: activeSchedule, resolveLayout: resolveLayout, normalizeWidget: normalizeWidget,
+    bookingWindow: bookingWindow, pickBooking: pickBooking, resolveWidgets: resolveWidgets,
     fonts: fonts, widgetStyle: widgetStyle, webWidget: webWidget, widgetNetworkHint: widgetNetworkHint, screenStatus: screenStatus, filterScreens: filterScreens };
   root.SmartSignageCore = core;
   if (typeof module !== 'undefined' && module.exports) module.exports = core;

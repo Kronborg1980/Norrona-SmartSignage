@@ -94,3 +94,12 @@ test('a hosted media reference without a verified asset entry cannot replace the
  await assert.rejects(h.api.activate(manifest([{id:'image',type:'image',src:'/media/'+'a'.repeat(32)}]),'"bad"'),/Unsupported manifest/);
  assert.equal(h.api.snapshot().active.layouts[0].widgets[0].text,'Keep playing');
 });
+test('incomplete channel content and references cannot replace last-good playback',async()=>{
+ const old=manifest([{id:'old',type:'text',text:'Keep playing'}]),h=harness();h.api.setActive(old);
+ const candidate={...manifest([{id:'channel-area',type:'channel',channel_id:'main-channel'}]),programming:1,channels:[{id:'main-channel'}],content:[{id:'image-content',version:1,widget:{type:'image',src:'/media/'+'a'.repeat(32)}}],bookings:[{id:'book',scope:'channel',target:'main-channel',item_type:'content',item_id:'image-content',duration:10,days:[0,1,2,3,4,5,6]}]};
+ await assert.rejects(h.api.activate(candidate,'"incomplete"'),/Unsupported manifest/);
+ candidate.content[0].widget={type:'text',text:'Available'};candidate.bookings[0].item_id='missing-content';
+ assert.equal(h.api.manifestValid(candidate),false);
+ candidate.bookings[0].item_id='image-content';candidate.channels=[];assert.equal(h.api.manifestValid(candidate),false);
+ assert.equal(h.api.snapshot().active.layouts[0].widgets[0].text,'Keep playing');
+});

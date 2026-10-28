@@ -50,7 +50,7 @@ test('100 concurrent virtual players: assignment, sync, conditional requests and
  }));
  // A new connection without an ETag must receive a complete manifest.
  const reconnect=await wave(request);
- const list=await json(request,'/api/admin/screens',undefined,admin,'GET');expect(list.items).toHaveLength(100);expect(list.items.every(s=>s.last_seen)).toBe(true);
+ const list=await json(request,'/api/admin/screens',undefined,admin,'GET'),owned=list.items.filter(s=>ids.includes(s.id));expect(owned).toHaveLength(100);expect(owned.every(s=>s.last_seen)).toBe(true);
  const stats=rows=>{const ms=rows.map(x=>x.ms).sort((a,b)=>a-b);return {requests:ms.length,p50_ms:Math.round(ms[49]),p95_ms:Math.round(ms[94]),max_ms:Math.round(ms[99])};};
  const report={runtime:'local Wrangler D1/R2; 100 concurrent HTTP requests per wave; no physical devices',initial:stats(first),unchanged:stats(unchanged),group_update:stats(updated),reconnect:stats(reconnect)};
  console.log('Fleet load results:',JSON.stringify(report));
@@ -61,6 +61,7 @@ test('browser fleet filtering, safe selection, bulk edit, pairing and offline pl
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');await page.locator('#password').fill(password);await page.getByRole('button',{name:'Log ind'}).click();
  await page.locator('#nav [data-view=screens]').click();
+ await page.locator('#screen-search').fill('Virtual ');
  await expect(page.locator('#screens-body tr')).toHaveCount(100);
  await page.locator('#screen-search').fill('Virtual 00');await expect(page.locator('#screens-body tr')).toHaveCount(10);
  await page.locator('#screen-select-all').check();await expect(page.locator('#screen-count')).toContainText('10 selected');

@@ -2,11 +2,11 @@
 
 ## Latest bug review
 
-**45 Node tests and 21 Chromium tests pass**, including 100 concurrent weather requests coalesced into one controlled upstream call, 100 concurrent virtual players and rejection/recovery of corrupt media updates. Worker deployment dry-run, syntax and whitespace checks pass. The prior dependency audit reported **0 known vulnerabilities** in the installed lockfile.
+**54 Node tests and 24 Chromium tests pass**, including 100 concurrent channel players in local Wrangler D1/R2, the existing 100-player fleet waves, weather request coalescing and corrupt/incomplete-manifest rejection. Worker deployment dry-run, syntax and whitespace checks pass. The prior dependency audit reported **0 known vulnerabilities** in the installed lockfile.
 
 The review fixed concurrency errors in pairing/login, editor data corruption, offline integrity/state recovery, portrait geometry, schedule-target changes, SQL parameter limits and smaller API/tooling defects. See [the detailed review](REVIEW_2026-10-28.md), which also records unresolved fetch-timeout, cache-cleanup, pairing-persistence and screen-rotation issues. These remain limitations; the system is not certified for shipboard production.
 
-GitHub and Cloudflare Workers/D1/R2 are already deployed according to the user. This development session uses local emulation and does not change that deployment or operational screens.
+GitHub and Cloudflare Workers/D1/R2 are deployed. Changes are sent to GitHub for the existing Cloudflare build. Validation here uses local emulation; remote D1 changes and physical screen installation are not performed by these tests.
 
 | Capability | Evidence / remaining work |
 | --- | --- |
@@ -17,10 +17,12 @@ GitHub and Cloudflare Workers/D1/R2 are already deployed according to the user. 
 | 100 concurrent virtual players | Local Worker test covers pairing, sync/heartbeat, 304, update to 50 devices and reconnect; not a physical/remote capacity claim |
 | Browser fleet controls and player offline recovery | Playwright suite in `tests/browser/`; see browser test guide for scope |
 | Layout Studio | Existing layered editor preserved; full editor interaction coverage still pending |
-| Scheduling | Existing UTC resolver and regression tests preserved |
+| Scheduling | Existing UTC rules preserved as fallback; new content/layout/channel bookings support dates, weekdays, times, duration, order and priority |
+| Channels and reusable content | Separate menu sections, resizable channel areas, content uploads/links, library widgets and channel/screen preview |
+| New D1 schema | Additive migration 0003; explicit authenticated activation available in backoffice for existing deployments |
 | Tizen installation and video codecs | Physical model, firmware, signed WGT and long-duration playback still require tests |
 | Group inheritance, staged rollout and rollback | Not implemented; zones remain current grouping model |
-| Multi-user roles, LAN relay, advanced widgets/playlists | Not implemented |
+| Multi-user roles, LAN relay, advanced campaigns/transitions | Not implemented |
 
 The test suite uses real local D1/R2 emulation for browser and concurrency checks; Node tests use SQLite and mocked R2. Neither substitutes for remote quota testing, representative large media, 24–48 hour network interruption tests or hardware validation.
 
@@ -61,7 +63,7 @@ Added 18 font choices with 8 fonts bundled for offline use (licenses and source 
 
 HTML source now supports 512 KiB UTF-8 per widget; layout POSTs accept up to 1 MiB, with bounded streaming reads and clear errors. Other JSON endpoints keep a 250,000-byte limit. The user-provided 274,999-byte widget saved and round-tripped exactly in an isolated SQLite API check; its source is not copied into the repository. A browser regression exercises a 280 KB layout and explicit external HTTPS permission, while preserving sandbox storage isolation. Live external API access/CORS has not been verified here.
 
-The accepted bookings/channel model (whole-layout or fullscreen content on screens, content bookings inside channels) is documented in BOOKING_CHANNEL_MODEL.md; this release does not implement that redesign.
+The accepted bookings/channel model (whole-layout or fullscreen content on screens, content bookings inside channels) is now implemented as described in [BOOKING_CHANNEL_MODEL.md](BOOKING_CHANNEL_MODEL.md). The earlier large-HTML update did not include it.
 
 ## Map-widget startup fix
 

@@ -88,6 +88,14 @@ Under **Screens**, click **Preview** beside a display. Backoffice embeds the act
 
 This is planned content, not a remote screenshot: an offline or disabled screen may still display an earlier cached version.
 
+## Channels, content and bookings
+
+**Channels**, **Content** and **Bookings** now have their own main-menu sections. If prompted on an existing deployment, open **Channels → Enable channels and bookings** once. This authenticated setup adds the new tables without changing existing layouts or schedules; normal installations can apply migration `0003_channels_bookings.sql` instead.
+
+Create reusable media/text/widgets under **Content**, create a named stream under **Channels**, then add its **Bookings**. In **Layout Studio**, choose **Channel** and select the channel for that resizable area. Reuse the same channel in other layouts. **Screens → + Booking** can schedule either an entire layout or individual fullscreen content directly on a screen. All bookings support optional dates, weekdays, UTC time windows, duration, order, priority and pausing. Existing inline layers can be copied with **Save as reusable content**.
+
+The highest active priority plays; equal-priority bookings rotate by order and duration. Direct screen bookings temporarily override the original layout schedules/default, then return to them. Uploaded channel assets are integrity-checked before activation and can rotate offline. Refresh the player before assigning channels; older players preserve their previous content and reject manifests requiring the new capability. Preview uses the same timed resolver. See [the booking/channel model](docs/BOOKING_CHANNEL_MODEL.md) for exact date/tie rules, setup and compatibility limits.
+
 ## Manage 100+ displays
 
 Under **Screens**, combine search with zone and status filters. The header checkbox selects all visible displays. **Update selected** shows the selected names and lets you change default layout (including clearing it), zone, orientation or enabled state. Changing filters clears selection; a periodic refresh retains only still-visible selected IDs. Disabling requires confirmation and stops future sync; previously cached playback continues.
@@ -110,7 +118,7 @@ Tests exercise 100 simultaneous API clients, 304 responses, assignment to 50 sel
 
 ## Deploy to Cloudflare
 
-The user reports that GitHub, Workers, D1 and R2 are already deployed. The following steps are for a **new installation**; reuse existing resources for this project. The configured D1 ID is already populated. This development update does not deploy or run remote migrations.
+GitHub, Workers, D1 and R2 are already deployed. Reuse the existing resources and configured D1 ID. The commands below describe a **new installation**. Existing deployments can activate the channel schema through the authenticated backoffice action described above; this development session has not executed remote D1 changes.
 
 1. Log in from the terminal: `npx wrangler login`.
 2. Create database: `npx wrangler d1 create signage-db`.
@@ -148,7 +156,7 @@ See the [28 October code review](docs/REVIEW_2026-10-28.md) for corrected defect
 - Cloudflare deployment is reported by the user; this update is validated locally. No physical Tizen validation or signed `.wgt` is documented.
 - Admin is currently single-password, not multi-user RBAC. Production requires identities, role management and audit write coverage.
 - Media library only supports JPG/PNG/WebP/GIF and MP4 up to **25 MB**. Larger videos require multipart upload/transcoding and local distribution.
-- ZIP widget packages, weather, ship location/speed, PDF/PPTX, campaign playlists, remote screenshot/reboot, and synchronized multi-display playback are **not implemented yet**. Custom inline HTML and hosted web-page widgets are available as described above.
+- ZIP widget packages, a built-in ship-data widget, PDF/PPTX, advanced campaign management, remote screenshot/reboot, and synchronized multi-display playback are **not implemented yet**. Reusable channel playlists/bookings, custom inline HTML and hosted web-page widgets are available. Known Open-Meteo queries from inline widgets use the fixed weather integration described above.
 - When offline, only **pre-cached `/media/` assets** are expected to work; external HTTPS images/videos require network. Device CacheStorage may be evicted or have quota limits.
 - Scheduling uses **UTC**, not ship-local time. Choosing whether the ship uses Tórshavn, UTC or zone transitions is a separate product decision.
 - No LAN mirror or local server aboard yet. A shipboard CDN/distribution node is recommended for 50–100 screens and large videos.
@@ -168,8 +176,10 @@ See the [28 October code review](docs/REVIEW_2026-10-28.md) for corrected defect
 - `public/index.html`, `style.css`, `admin.js`: admin console.
 - `public/player.html`, `player.css`, `player.js`: signage player.
 - `public/shared.js`: shared schedule/layout contract.
+- `public/programming-admin.js`: channel, content and booking administration.
 - `public/sw.js`: best-effort hosted-player shell caching.
 - `src/worker.js`: Cloudflare API and media routes.
+- `src/programming.js`, `programming-schema.js`: channel/bookings API, manifests and explicit schema activation.
 - `migrations/`: D1 schema.
 - `scripts/prepare-tizen.mjs`: unsigned Tizen source bundle preparation.
 - `tests/`: Node test runner.

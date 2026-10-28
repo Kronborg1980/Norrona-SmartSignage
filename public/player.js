@@ -5,6 +5,7 @@ var server=(window.SMARTSIGNAGE_SERVER_URL||'').replace(/\/$/,'');
 function endpoint(path){return server+path;}
 var $=id=>document.getElementById(id);
 var credentials=null,active=null,lastEtag='',layoutId='',lastVersion='',pairCode='',assets={},clockTimer=null,pairTimer=null,busy=false,lastSync=0;
+var renderedWidgets=Object.create(null);
 var status='Starting',appVisible=false;
 var stateKey='signage-state-v2',manifestKey='signage-manifest-v1',credKey='signage-device-v1',etagKey='signage-etag-v1';
 function state(s){status=s;$('debug-state').textContent=s;}
@@ -16,7 +17,17 @@ function validCred(o){return o&&/^[a-f0-9]{24}$/.test(o.id)&&/^[a-f0-9]{64}$/.te
 function manifestValid(o){
  if(!o||o.schema!==1||!o.screen||typeof o.screen.id!=='string'||!Array.isArray(o.layouts)||!Array.isArray(o.assets)||!Array.isArray(o.schedules))return false;
  if(!o.assets.every(a=>a&&typeof a.url==='string'&&typeof a.sha256==='string'&&/^[a-f0-9]{64}$/.test(a.sha256)&&Number.isInteger(a.size)&&a.size>0)||!o.schedules.every(s=>s&&typeof s.id==='string'))return false;
- return o.layouts.every(l=>l&&typeof l.id==='string'&&Array.isArray(l.widgets)&&l.widgets.every(w=>w&&typeof w.type==='string'&&(!/^\/media\//.test(w.src||'')||o.assets.some(a=>a.url===w.src))));
+ const widgetOK=w=>w&&typeof w.type==='string'&&(!/^\/media\//.test(w.src||'')||o.assets.some(a=>a.url===w.src));
+ if(!o.layouts.every(l=>l&&typeof l.id==='string'&&Array.isArray(l.widgets)&&l.widgets.every(widgetOK)))return false;
+ if(o.programming!==undefined&&o.programming!==1)return false;
+ if(o.programming===1){
+  if(!Array.isArray(o.channels)||!Array.isArray(o.content)||!Array.isArray(o.bookings))return false;
+  if(!o.channels.every(c=>c&&typeof c.id==='string')||!o.content.every(c=>c&&typeof c.id==='string'&&widgetOK(c.widget)&&c.widget.type!=='channel'))return false;
+  if(!o.bookings.every(b=>b&&typeof b.id==='string'&&Number.isInteger(b.duration)&&b.duration>0&&Array.isArray(b.days)&&['screen','zone','all','channel'].includes(b.scope)&&
+    (b.scope!=='channel'||b.item_type==='content'&&o.channels.some(c=>c.id===b.target))&&
+    (b.item_type==='content'?o.content.some(c=>c.id===b.item_id):b.item_type==='layout'&&o.layouts.some(l=>l.id===b.item_id))))return false;
+ }
+ return o.layouts.every(l=>l.widgets.every(w=>w.type!=='channel'||o.programming===1&&o.channels.some(c=>c.id===w.channel_id)));
 }
 function mediaKey(url){return new URL(endpoint(url),location.href).toString();}
 async function digest(bytes){var result=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(result),x=>x.toString(16).padStart(2,'0')).join('');}
@@ -65,8 +76,12 @@ function resize(){if(!active)return;var l=core.resolveLayout(active,new Date()),
 function render(){if(!active){show('pair-screen');return;}
  var layout=core.resolveLayout(active,new Date());$('debug-name').textContent=active.screen.name||'';
  if(!layout){show('empty-state');$('empty-name').textContent=active.screen.name;layoutId='';clearStage();return;}
- show('');if(layout.id===layoutId)return;layoutId=layout.id;clearStage();var stage=$('stage');stage.style.background=layout.background||'#071220';
- layout.widgets.slice().sort((a,b)=>a.z-b.z).forEach(function(input){
+ show('');if(layout.id!==layoutId){clearStage();layoutId=layout.id;}var stage=$('stage');stage.style.background=layout.background||'#071220';
+ var desired=Object.create(null);
+ core.resolveWidgets(layout,active,new Date()).sort((a,b)=>a.widget.z-b.widget.z).forEach(function(entry,index){
+  var slot=String(index);desired[slot]=true;
+  if(renderedWidgets[slot]&&renderedWidgets[slot].key===entry.key)return;
+  var input=entry.widget;
   var w=core.normalizeWidget(input,layout.orientation),elem=create('div','widget');
   Object.assign(elem.style,{left:w.x+'px',top:w.y+'px',width:w.w+'px',height:w.h+'px',zIndex:String(w.z),color:w.color,background:w.background,borderRadius:w.radius+'px',fontSize:w.fontSize+'px',textAlign:w.align});
   Object.assign(elem.style,core.widgetStyle(w));
@@ -75,7 +90,7 @@ function render(){if(!active){show('pair-screen');return;}
    var t=create('div','text',w.text);t.style.lineHeight='inherit';t.style.alignItems=w.verticalAlign==='top'?'flex-start':w.verticalAlign==='bottom'?'flex-end':'center';t.style.justifyContent=w.align==='center'?'center':w.align==='right'?'flex-end':'flex-start';elem.append(t);
   }else if(w.type==='clock'){
    var t=create('div','clock');elem.append(t);t.style.lineHeight='inherit';t.style.alignItems=w.verticalAlign==='top'?'flex-start':w.verticalAlign==='bottom'?'flex-end':'center';t.style.justifyContent=w.align==='left'?'flex-start':w.align==='right'?'flex-end':'center';
-   var tick=()=>t.textContent=new Date().toISOString().slice(11,16)+' UTC';tick();(window._clocks=window._clocks||[]).push(setInterval(tick,1000));
+   var tick=()=>t.textContent=new Date().toISOString().slice(11,16)+' UTC';tick();elem._clock=setInterval(tick,1000);(window._clocks=window._clocks||[]).push(elem._clock);
   }else if(w.type==='ticker'){
    var wrap=create('div','ticker');var span=create('span','',w.text);span.style.animationDuration=Math.max(8,(w.text.length+40)*100/w.speed/2)+'s';wrap.append(span);elem.append(wrap);
   }else if(w.type==='image'||w.type==='video'){
@@ -83,13 +98,16 @@ function render(){if(!active){show('pair-screen');return;}
    if(w.type==='video'){m.autoplay=true;m.muted=true;m.loop=true;m.playsInline=true;m.setAttribute('playsinline','');m.addEventListener('error',()=>state('Video playback error'));m.play().catch(()=>state('Video autoplay blocked'));}
    elem.append(m);
   }stage.append(elem);
- });resize();appVisible=true;
+  if(renderedWidgets[slot])removeWidget(renderedWidgets[slot].elem);
+  renderedWidgets[slot]={key:entry.key,elem:elem};
+ });Object.keys(renderedWidgets).forEach(slot=>{if(!desired[slot]){removeWidget(renderedWidgets[slot].elem);delete renderedWidgets[slot];}});resize();appVisible=true;
 }
-function clearStage(){(window._clocks||[]).forEach(clearInterval);window._clocks=[];var stage=$('stage');stage.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});while(stage.firstChild)stage.removeChild(stage.firstChild);}
+function removeWidget(elem){if(elem._clock){clearInterval(elem._clock);window._clocks=(window._clocks||[]).filter(x=>x!==elem._clock);}elem.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});$('stage').removeChild(elem);}
+function clearStage(){(window._clocks||[]).forEach(clearInterval);window._clocks=[];renderedWidgets=Object.create(null);var stage=$('stage');stage.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});while(stage.firstChild)stage.removeChild(stage.firstChild);}
 async function pairingStart(){try{show('pair-screen');var r=await fetch(endpoint('/api/player/pair/start'),{method:'POST'});if(!r.ok)throw Error('Pairing service unavailable');var j=await r.json();pairCode=j.code;$('pair-code').textContent=pairCode;$('pair-status').textContent='Waiting for administrator approval';$('try-again').classList.add('hidden');clearInterval(pairTimer);pairTimer=setInterval(pairingPoll,4000);}catch(e){state('Pairing unavailable');$('pair-status').textContent=e.message;$('try-again').classList.remove('hidden');}}
 async function pairingPoll(){if(!pairCode||busy)return;busy=true;try{var r=await fetch(endpoint('/api/player/pair/status?code='+encodeURIComponent(pairCode)),{cache:'no-store'});if(r.status===410){clearInterval(pairTimer);$('pair-status').textContent='Code expired';$('try-again').classList.remove('hidden');return;}if(!r.ok)throw Error('Pair status failed');var j=await r.json();if(j.paired){credentials={id:j.screen_id,token:j.token};store(credKey,credentials);pairCode='';clearInterval(pairTimer);state('Paired');show('empty-state');setTimeout(sync,0);}}catch(e){state('Waiting for connection');}finally{busy=false;}}
 $('try-again').onclick=pairingStart;
-async function sync(){if(!validCred(credentials)||busy)return;busy=true;lastSync=Date.now();try{var h={'X-Player-ID':credentials.id,'X-Player-Token':credentials.token};if(lastEtag)h['If-None-Match']=lastEtag;var r=await fetch(endpoint('/api/player/sync'),{method:'POST',headers:h,cache:'no-store'});
+async function sync(){if(!validCred(credentials)||busy)return;busy=true;lastSync=Date.now();try{var h={'X-Player-ID':credentials.id,'X-Player-Token':credentials.token,'X-Player-Capabilities':'channels-v1'};if(lastEtag)h['If-None-Match']=lastEtag;var r=await fetch(endpoint('/api/player/sync'),{method:'POST',headers:h,cache:'no-store'});
  if(r.status===401){state('Device revoked — re-pair required');return;}
  if(r.status===304){state('Online · up to date');return;}
  if(!r.ok)throw Error('Sync HTTP '+r.status);var j=await r.json();await activate(j,r.headers.get('ETag')||'');
@@ -125,7 +143,7 @@ if(location.search.indexOf('debug=1')>=0)$('debug').classList.remove('hidden');
  else{if(!active){show('empty-state');$('empty-name').textContent='Connecting…';}sync();}
  window.addEventListener('resize',resize);
  setInterval(()=>{if(credentials&&Date.now()-lastSync>55000)sync();},15000);
- setInterval(()=>{if(active){var layout=core.resolveLayout(active,new Date());if((layout&&layout.id||'')!==layoutId)render();}},15000);
+ setInterval(()=>{if(active)render();},1000);
 }
 start();
 })();
