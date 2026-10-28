@@ -2,7 +2,7 @@
 
 ## Latest bug review
 
-**37 Node tests and 19 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
+**45 Node tests and 21 Chromium tests pass**, including 100 concurrent weather requests coalesced into one controlled upstream call, 100 concurrent virtual players and rejection/recovery of corrupt media updates. Worker deployment dry-run, syntax and whitespace checks pass. The prior dependency audit reported **0 known vulnerabilities** in the installed lockfile.
 
 The review fixed concurrency errors in pairing/login, editor data corruption, offline integrity/state recovery, portrait geometry, schedule-target changes, SQL parameter limits and smaller API/tooling defects. See [the detailed review](REVIEW_2026-10-28.md), which also records unresolved fetch-timeout, cache-cleanup, pairing-persistence and screen-rotation issues. These remain limitations; the system is not certified for shipboard production.
 
@@ -68,3 +68,13 @@ The accepted bookings/channel model (whole-layout or fullscreen content on scree
 Leaflet 1.7.1 JS/CSS/images are bundled with the BSD license and resolved locally from supported unpkg URLs without changing saved source. Known Inter Google Fonts stylesheet references use the local font bundle. Static font/vendor assets permit CORS for opaque sandboxed frames. A generated local bundle is loaded by the parent application and embeds supported library code/CSS/images/fonts into the sandboxed document; this fixes unreliable iframe access to the parent service-worker cache. The bundle is cached for offline player boot and copied to the Tizen source bundle. Live networking remains opt-in; disabled access and failed host/status are visible, with source-checked iframe messages and no credential/URL logging.
 
 The original pasted widget was tested privately (not committed): its map initialized, issued the vessel request, and updated speed/destination/weather using controlled API responses. The final private run reported no browser errors. Four committed browser regressions cover real Leaflet initialization, XHR data, font loading, failure/recovery diagnostics, iframe message source checks and offline map reload. Actual remote ship/weather API reachability and CORS permissions remain unverified from this environment.
+
+## Open-Meteo HTTP 429 recovery
+
+The screenshot confirms live ship/map data while Open-Meteo refuses weather requests with HTTP 429. The original widget polls three weather queries every two minutes per screen and its own localStorage cache cannot operate inside the opaque sandbox.
+
+Network-enabled inline widgets now adapt those three known GET queries to a fixed, read-only Worker weather integration. Fifteen-minute shared caching, a 0.25-degree weather grid, concurrent-request coalescing within an isolate, host-level rate-limit cooldown and labelled stale results reduce repeated requests without modifying saved HTML or weakening iframe isolation. The endpoint accepts only validated coordinates and a fixed profile; responses have an eight-second timeout/128 KiB bound and redirects are rejected. It adds no migration/binding.
+
+Tests use controlled upstream responses; real provider quota and Cloudflare caching behavior remain unverified here. Cache API results/cooldowns are local to a data centre and may be evicted. This is not a guarantee of global provider quota compliance, a provider subscription, or persistent per-screen offline weather. Quota/plan suitability still needs verification before fleet rollout.
+
+Weather validation also covers host-wide 429 backoff, numeric/date Retry-After values, stale-result age/expiry, fixed profiles, rejected arbitrary/duplicate query parameters, malformed/oversized responses, an eight-second timeout, sandbox isolation and independent wind/temperature diagnostics. The exact pasted widget passed a private browser run through the new endpoint with controlled ship/weather data and no console/page errors. Live production weather and regional/global Cloudflare cache behavior are not certified by these tests.

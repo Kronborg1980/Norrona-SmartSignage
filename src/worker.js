@@ -1,3 +1,4 @@
+import {weatherRoute} from './widget-weather.js';
 const now = () => new Date().toISOString();
 const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options':'nosniff' };
 function response(data, status=200, extra={}) { return new Response(JSON.stringify(data), { status, headers: {...headers, ...extra} }); }
@@ -251,6 +252,7 @@ export { validateWidgets, allowedUrl, equal };
 export default {async fetch(req,env) {
  try {
   const url=new URL(req.url), p=url.pathname;
+  if(p==='/api/widget/weather')return await weatherRoute(req);
   if(p.startsWith('/api/admin/'))return await adminRoute(req,env,url);
   if(p.startsWith('/api/player/')||p.startsWith('/media/')) {
    const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET,POST,HEAD,OPTIONS','Access-Control-Allow-Headers':'X-Player-ID,X-Player-Token,If-None-Match,Content-Type,Range','Access-Control-Expose-Headers':'ETag,Content-Range'};

@@ -74,33 +74,75 @@
       for (var i = 0; i < frames.length; i++) {
         if (frames[i].contentWindow !== e.source) continue;
         var box = frames[i].parentElement, note = box.querySelector('.widget-runtime-hint');
-        if (data.ok === true) { if (note && note.getAttribute('data-host') === data.host) note.remove(); return; }
+        var kind = ['weather','wind','marine'].indexOf(data.kind) >= 0 ? data.kind : '';
+        var key = data.host + '/' + kind, problems = frames[i]._signageProblems || (frames[i]._signageProblems = {});
+        if (data.ok === true && data.stale !== true) delete problems[key]; else problems[key] = data;
+        var keys = Object.keys(problems);
+        if (!keys.length) { if (note) note.remove(); return; }
+        data = problems[keys[0]];
         if (!note) {
           note = document.createElement('div'); note.className = 'widget-runtime-hint';
           note.style.cssText = 'position:absolute;left:0;right:0;bottom:0;padding:8px;background:#600e;font:14px Arial,sans-serif;color:white;z-index:2147483647;pointer-events:none';
           box.appendChild(note);
         }
         note.setAttribute('data-host', data.host);
-        note.textContent = 'Widget connection failed: ' + data.host + (Number.isInteger(data.status) && data.status >= 400 && data.status <= 599 ? ' (HTTP ' + data.status + ')' : ' (network or CORS).');
+        var weather = data.host === 'api.open-meteo.com' || data.host === 'marine-api.open-meteo.com';
+        note.style.background = weather ? '#674500ee' : '#600e';
+        if (weather && data.stale === true) {
+          var age = Number(data.age);
+          note.textContent = 'Weather temporarily unavailable. Showing cached weather' + (isFinite(age) && age >= 0 ? ' from ' + Math.ceil(age / 60) + ' min ago.' : '.') + ' Ship data continues.';
+        } else if (weather && data.status === 429) note.textContent = 'Weather service is busy (HTTP 429). Retrying later; ship data continues.';
+        else note.textContent = 'Widget connection failed: ' + data.host + (Number.isInteger(data.status) && data.status >= 400 && data.status <= 599 ? ' (HTTP ' + data.status + ')' : ' (network or CORS).');
         return;
       }
     });
   }
   // Runs inside the opaque sandbox. Only host/status is reported, never URLs,
-  // request headers, credentials or response bodies. Request behavior is retained.
-  function widgetMonitor() {
-    function report(url, ok, status) {
-      try { var host = new URL(typeof url === 'string' ? url : url.url, document.baseURI).host; if (host) parent.postMessage({type:'signage-widget-network',host:host,ok:ok,status:status}, '*'); } catch(e) {}
+  // request headers, credentials or response bodies. Known weather GETs use the
+  // fixed shared cache endpoint; other requests retain their existing behavior.
+  function widgetMonitor(weatherEndpoint) {
+    function weatherRequest(url, method) {
+      try {
+        var u = new URL(typeof url === 'string' ? url : url.url, document.baseURI), p = u.searchParams;
+        if (String(method || 'GET').toUpperCase() !== 'GET' || u.protocol !== 'https:' || u.username || u.password || u.port) return null;
+        // Only the three known public queries are adapted. API keys, custom
+        // fields/units and other integrations continue directly as authored.
+        var allowed = ['latitude','longitude','current','temperature_unit','timezone','wind_speed_unit','_'];
+        var valid = true; p.forEach(function(value,key) { if (allowed.indexOf(key) < 0 || p.getAll(key).length !== 1) valid = false; });
+        if (!valid) return null;
+        var fields = String(p.get('current') || '').split(',').sort().join(','), kind;
+        if (u.hostname === 'api.open-meteo.com' && u.pathname === '/v1/forecast') {
+          if (fields === 'temperature_2m,weathercode' && p.get('temperature_unit') === 'celsius' && p.get('timezone') === 'auto' && !p.has('wind_speed_unit')) kind = 'weather';
+          if (fields === 'wind_direction_10m,wind_speed_10m' && p.get('wind_speed_unit') === 'ms' && !p.has('temperature_unit') && !p.has('timezone')) kind = 'wind';
+        } else if (u.hostname === 'marine-api.open-meteo.com' && u.pathname === '/v1/marine' && fields === 'wave_direction,wave_height' && !p.has('temperature_unit') && !p.has('timezone') && !p.has('wind_speed_unit')) kind = 'marine';
+        if (!kind) return null;
+        var target = new URL(weatherEndpoint); target.search = 'kind=' + kind + '&latitude=' + encodeURIComponent(p.get('latitude') || '') + '&longitude=' + encodeURIComponent(p.get('longitude') || '');
+        return {url:target.href,kind:kind};
+      } catch(e) { return null; }
+    }
+    function report(url, ok, status, weather, getHeader) {
+      try {
+        var host = new URL(typeof url === 'string' ? url : url.url, document.baseURI).host;
+        if (host) parent.postMessage({type:'signage-widget-network',host:host,ok:ok,status:status,kind:weather && weather.kind,stale:!!(weather && getHeader && getHeader('X-Signage-Weather-Stale') === '1'),age:weather && getHeader ? Number(getHeader('X-Signage-Weather-Age')) : null}, '*');
+      } catch(e) {}
     }
     var open = XMLHttpRequest.prototype.open;
     XMLHttpRequest.prototype.open = function() {
-      var url = arguments[1], result = open.apply(this, arguments);
-      this.addEventListener('loadend', function() { report(url, this.status >= 200 && this.status < 400, this.status); });
+      var url = arguments[1], weather = weatherRequest(url, arguments[0]), args = Array.prototype.slice.call(arguments);
+      if (weather) args[1] = weather.url;
+      var result = open.apply(this, args);
+      if (this._signageNetworkListener) this.removeEventListener('loadend', this._signageNetworkListener);
+      this._signageNetworkListener = function() { var xhr = this; report(url, xhr.status >= 200 && xhr.status < 400, xhr.status, weather, function(name) { return xhr.getResponseHeader(name); }); };
+      this.addEventListener('loadend', this._signageNetworkListener);
       return result;
     };
     if (window.fetch) {
       var fetch = window.fetch;
-      window.fetch = function() { var url = arguments[0]; return fetch.apply(this, arguments).then(function(r) { report(url, r.ok, r.status); return r; }, function(e) { report(url, false, 0); throw e; }); };
+      window.fetch = function() {
+        var url = arguments[0], options = arguments[1], weather = weatherRequest(url, options && options.method || url && url.method), args = arguments;
+        if (weather) args = [weather.url, {method:'GET',credentials:'omit',signal:options && options.signal || url && url.signal}];
+        return fetch.apply(this, args).then(function(r) { report(url, r.ok, r.status, weather, function(name) { return r.headers.get(name); }); return r; }, function(e) { report(url, false, 0, weather); throw e; });
+      };
     }
     window.addEventListener('error', function(e) { if (e.target && (e.target.src || e.target.href)) report(e.target.src || e.target.href, false, 0); }, true);
   }
@@ -127,8 +169,9 @@
         source = source.replace(/<link\b[^>]*\bhref\s*=\s*["'][^"']*\/fonts\.css["'][^>]*>/gi, function() { return '<style>' + built.interCss + '</style>'; });
       }
       var fontFiles = new URL('./fonts/', location.href).href;
-      var policy = "default-src 'none'; script-src 'unsafe-inline' " + vendor + "leaflet.js" + https + "; style-src 'unsafe-inline' " + vendor + "leaflet.css " + fonts + https + "; img-src data: " + vendor + "images/" + https + "; font-src data: " + fontFiles + https + "; media-src data:" + https + "; connect-src " + (https ? 'https:' : "'none'") + "; frame-src 'none'; base-uri 'none'; form-action 'none'";
-      frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + policy + '"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style>' + (w.htmlNetwork === true ? '<script>(' + widgetMonitor.toString() + ')();</script>' : '') + source;
+      var weatherEndpoint = new URL('/api/widget/weather', root.SMARTSIGNAGE_SERVER_URL || location.href).href;
+      var policy = "default-src 'none'; script-src 'unsafe-inline' " + vendor + "leaflet.js" + https + "; style-src 'unsafe-inline' " + vendor + "leaflet.css " + fonts + https + "; img-src data: " + vendor + "images/" + https + "; font-src data: " + fontFiles + https + "; media-src data:" + https + "; connect-src " + (https ? 'https: ' + weatherEndpoint : "'none'") + "; frame-src 'none'; base-uri 'none'; form-action 'none'";
+      frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + policy + '"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style>' + (w.htmlNetwork === true ? '<script>(' + widgetMonitor.toString() + ')(' + JSON.stringify(weatherEndpoint).replace(/</g, '\\u003c') + ');</script>' : '') + source;
     } else {
       try { var url = new URL(w.src); if (url.protocol === 'https:' && !url.username && !url.password) frame.src = url.href; } catch (e) {}
     }
