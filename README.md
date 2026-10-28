@@ -52,6 +52,10 @@ Run automated tests:
 npm test
 ```
 
+## Resize images and videos
+
+In Layout Studio, select a layer and drag its blue corner handles to resize it, or enter exact **Width** and **Height** values in Inspector. Drag the middle to move it. **Media scaling → Show whole media** preserves the full image/video inside the box; **Fill and crop** fills the box while cropping edges. **Fill canvas** expands the box to the selected landscape/portrait canvas. Click **Save layout** to publish the change to assigned displays.
+
 ## Preview a display
 
 Under **Screens**, click **Preview** beside a display. Backoffice embeds the actual player renderer and resolves that display's default layout and UTC schedules. Preview updates when administration data refreshes, shows connection status/last contact, and does not pair or modify device storage. Close it to stop preview media playback.

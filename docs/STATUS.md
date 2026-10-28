@@ -2,7 +2,7 @@
 
 ## Latest bug review
 
-**30 Node tests and 7 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
+**30 Node tests and 11 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
 
 The review fixed concurrency errors in pairing/login, editor data corruption, offline integrity/state recovery, portrait geometry, schedule-target changes, SQL parameter limits and smaller API/tooling defects. See [the detailed review](REVIEW_2026-10-28.md), which also records unresolved fetch-timeout, cache-cleanup, pairing-persistence and screen-rotation issues. These remain limitations; the system is not certified for shipboard production.
 
@@ -44,3 +44,7 @@ All 400 sync requests returned their expected status; registration and first hea
 ## Backoffice display preview
 
 Screens now includes Preview for each display, using the actual player renderer and shared UTC resolver. A Chromium test verifies zone-specific content, portrait placement, a second screen, and no device pairing/storage changes. Preview shows planned content, not a remote screenshot of cached/offline playback.
+
+## Media resizing
+
+Layout Studio supports four corner resize handles, explicit Width/Height, contain/cover scaling, and Fill canvas. New media layers default to contain. Four Chromium tests verify image/video resizing and persistence in landscape/portrait, top-left anchoring, minimum dimensions, and fit mode. Existing saved crop settings are preserved.
