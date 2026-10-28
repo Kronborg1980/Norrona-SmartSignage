@@ -41,6 +41,16 @@ test('widget validator enforces one video per composition',()=>{
  assert.throws(()=>validateWidgets([{type:'image',src:'javascript:boom'}]),/Media URL/);
  assert.equal(validateWidgets([{type:'text',x:-1,w:99999, text:'Hello'}])[0].w,1920);
 });
+test('portrait widgets keep their full vertical canvas in API and player',()=>{
+ const input={id:'portrait-text',type:'text',x:100,y:1700,w:500,h:150,text:'Bottom of display'};
+ const saved=validateWidgets([input],'portrait')[0];
+ const rendered=core.normalizeWidget(saved,'portrait');
+ assert.equal(saved.y,1700);assert.equal(rendered.y,1700);
+ assert.equal(validateWidgets([{...input,w:1920,h:1920}],'portrait')[0].w,1080);
+ assert.equal(core.normalizeWidget({...input,w:1920,h:1920},'portrait').h,1920);
+ assert.equal(validateWidgets([input])[0].y,1080);
+ assert.equal(core.normalizeWidget(input).y,1080);
+});
 test('administration and private screen API reject anonymous calls',async()=>{
  const env={ADMIN_PASSWORD:'secret',ADMIN_SESSION_SECRET:'abcdefghijklmnop'};
  const res=await worker.fetch(new Request('https://example.com/api/admin/screens'),env);

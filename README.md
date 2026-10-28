@@ -1,10 +1,10 @@
 # NORRÖNA SMARTSIGNAGE
 
-**v0.1-browser-pilot · Working first implementation · 27 October 2026**
+**Browser pilot · Fleet management update · 28 October 2026**
 
 **Vil du blot teste i browser via GitHub og Cloudflare? Læs [KOM_I_GANG_GITHUB_CLOUDFLARE_DA.md](KOM_I_GANG_GITHUB_CLOUDFLARE_DA.md) først.**
 
-A bespoke digital signage management system for Samsung Smart Signage / Tizen displays aboard M/S Norröna. Designed for an existing fleet of **30 screens** and a **100-screen target**, but **100-device performance and actual Samsung models are not yet field-tested**.
+A bespoke digital signage management system for Samsung Smart Signage / Tizen displays aboard M/S Norröna. Designed for an existing fleet of **30 screens** and at least **100 players**. Local tests exercise 100 concurrent virtual players; deployed Cloudflare capacity and actual Samsung models still require field tests.
 
 This repository contains runnable application code, not just a specification. It is an **early pilot**, not a replacement for Smartsign in live operations yet.
 
@@ -13,7 +13,7 @@ This repository contains runnable application code, not just a specification. It
 - Cloudflare Worker REST API; D1 migrations; R2 media objects.
 - Password-protected admin with 8-hour HMAC sessions and per-IP login throttling.
 - Screen provisioning via 12-character pairing code; unique 256-bit device tokens (SHA-256 token hash stored in D1), revocation/disable.
-- Dashboard and device fleet with online status (heartbeat, 3-minute grace), name, zone, orientation and default layout.
+- Dashboard and device fleet with online status (heartbeat, 3-minute grace), name, zone, orientation and default layout. Search by name/ID/zone, filter by zone/status, and bulk assign layouts, move zones, rotate or enable/disable selected displays.
 - Layout Studio: move independently layered **text, clock, image, muted video and ticker** elements, portrait/landscape, colours, sizes, z-index. One video per layout by design for conservative Tizen compatibility.
 - Image and short MP4 upload to R2. Hosted assets have SHA-256 digests.
 - UTC schedules targeting all screens / a zone / a device, weekdays, overnight time windows, priority overrides.
@@ -32,7 +32,7 @@ This repository contains runnable application code, not just a specification. It
 Run in project root:
 
 ```sh
-npm install
+npm ci
 cp .dev.vars.example .dev.vars
 # Edit .dev.vars: strong unique ADMIN_PASSWORD and ADMIN_SESSION_SECRET
 npm run db:local
@@ -52,11 +52,39 @@ Run automated tests:
 npm test
 ```
 
+## Preview a display
+
+Under **Screens**, click **Preview** beside a display. Backoffice embeds the actual player renderer and resolves that display's default layout and UTC schedules. Preview updates when administration data refreshes, shows connection status/last contact, and does not pair or modify device storage. Close it to stop preview media playback.
+
+This is planned content, not a remote screenshot: an offline or disabled screen may still display an earlier cached version.
+
+## Manage 100+ displays
+
+Under **Screens**, combine search with zone and status filters. The header checkbox selects all visible displays. **Update selected** shows the selected names and lets you change default layout (including clearing it), zone, orientation or enabled state. Changing filters clears selection; a periodic refresh retains only still-visible selected IDs. Disabling requires confirmation and stops future sync; previously cached playback continues.
+
+Zones remain the existing grouping model, including zone-based schedules. Moving a screen to another zone changes the schedules it receives. Bulk default assignment does not override a higher-priority schedule. Independent group membership, inherited defaults, staged rollout and rollback are still future work.
+
+The authenticated `PATCH /api/admin/screens/bulk` accepts `{ "ids": ["<screen-id>"], "patch": { "layout_id": "<layout-id>" } }`. Allowed patch fields are `layout_id` (or null), `zone`, `orientation`, and boolean `enabled`. It updates only those fields in one atomic SQL statement; a missing selected screen returns 409 without changing any screen. No schema migration is needed for this update.
+
+## Automated browser and fleet checks
+
+```sh
+npm ci
+npx playwright install --with-deps chromium
+npm run test:browser
+```
+
+The tests start a fresh local Worker on port 8790 with isolated D1/R2 state and public test-only credentials from `tests/browser/wrangler.toml`. They do not use your deployment, development database or `.dev.vars`. Do not deploy the test configuration. A system Chromium can be selected with `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`.
+
+Tests exercise 100 simultaneous API clients, 304 responses, assignment to 50 selected devices, complete manifests on reconnect, fleet controls, browser pairing, image playback and offline recovery. Timings are attached to the Playwright report; these are local measurements, not a hardware or production capacity certificate. See [browser tests](docs/BROWSER_TEST_DA.md) and [implementation status](docs/STATUS.md).
+
 ## Deploy to Cloudflare
+
+The user reports that GitHub, Workers, D1 and R2 are already deployed. The following steps are for a **new installation**; reuse existing resources for this project. The configured D1 ID is already populated. This development update does not deploy or run remote migrations.
 
 1. Log in from the terminal: `npx wrangler login`.
 2. Create database: `npx wrangler d1 create signage-db`.
-3. Replace `database_id = "00000000-0000-0000-0000-000000000000"` in `wrangler.toml` with the returned real ID.
+3. Set `database_id` in `wrangler.toml` to the new database ID only for a new installation.
 4. Create media bucket: `npx wrangler r2 bucket create norrona-signage-media`.
 5. Apply migration: `npm run db:remote`.
 6. Set secrets separately (do not put passwords in Git):
@@ -67,7 +95,7 @@ npm test
 7. Deploy: `npm run deploy`. Use your Worker URL or assign a branded domain.
 8. Add network security controls, backups, monitoring and a shipboard connectivity strategy before production.
 
-**Note:** The `wrangler.toml` UUID is intentionally a placeholder. The project cannot deploy until the actual database has been provisioned. Remote D1/R2 resources and Cloudflare credentials are not included.
+Remote credentials are configured separately. Local development and the automated test profile do not require a Cloudflare login.
 
 ## Tizen player packaging (source only)
 
@@ -85,7 +113,9 @@ Browser hosting at `/player.html` is for simulation/development and some configu
 
 ## Current limitations (important)
 
-- No live deployment, no actual Tizen screen tested, no Tizen certificate or installed `.wgt` yet.
+See the [28 October code review](docs/REVIEW_2026-10-28.md) for corrected defects and remaining risks, including fetch timeouts, old-media cache cleanup, failed pairing persistence and screen-level rotation.
+
+- Cloudflare deployment is reported by the user; this update is validated locally. No physical Tizen validation or signed `.wgt` is documented.
 - Admin is currently single-password, not multi-user RBAC. Production requires identities, role management and audit write coverage.
 - Media library only supports JPG/PNG/WebP/GIF and MP4 up to **25 MB**. Larger videos require multipart upload/transcoding and local distribution.
 - HTML5 arbitrary widgets, weather, ship location/speed, PDF/PPTX, campaign playlists, remote screenshot/reboot, and synchronized multi-display playback are **not implemented yet**.
@@ -95,7 +125,7 @@ Browser hosting at `/player.html` is for simulation/development and some configu
 - An offline reboot of an HTML URL Launcher cannot be guaranteed just by a service worker; packaged Tizen app and hardware tests are critical.
 - Device clock accuracy matters for scheduling. Verify NTP and recovery from outages.
 - For security, media URLs are long random, non-expiring, read-only URLs. Future private media should use access controls or signed URLs.
-- Test environment lacks a usable installed Wrangler runtime; source syntax and unit tests were executed, but the **full Worker+D1+R2 deployment workflow is not yet integration-tested**.
+- Wrangler with local D1 and R2 is integration-tested. Remote Cloudflare quotas, shipboard networking and sustained hardware playback remain unverified.
 
 ## Suggested rollout
 

@@ -33,14 +33,16 @@
     for (var i = 0; i < layouts.length; i++) if (layouts[i].id === id) return layouts[i];
     return null;
   }
-  function normalizeWidget(w) {
+  function normalizeWidget(w, orientation) {
     w = w || {};
+    var width = orientation === 'portrait' ? 1080 : 1920;
+    var height = orientation === 'portrait' ? 1920 : 1080;
     return {
       id: String(w.id || ''), type: String(w.type || 'text'),
-      x: Math.max(0, Math.min(1920, Number(w.x) || 0)),
-      y: Math.max(0, Math.min(1080, Number(w.y) || 0)),
-      w: Math.max(20, Math.min(1920, Number(w.w) || 400)),
-      h: Math.max(20, Math.min(1080, Number(w.h) || 150)),
+      x: Math.max(0, Math.min(width, Number(w.x) || 0)),
+      y: Math.max(0, Math.min(height, Number(w.y) || 0)),
+      w: Math.max(20, Math.min(width, Number(w.w) || 400)),
+      h: Math.max(20, Math.min(height, Number(w.h) || 150)),
       z: Math.max(0, Math.min(999, Number(w.z) || 0)),
       text: String(w.text || ''), src: String(w.src || ''),
       color: String(w.color || '#ffffff'), background: String(w.background || 'transparent'),
@@ -50,7 +52,21 @@
       speed: Math.max(5, Math.min(180, Number(w.speed) || 40))
     };
   }
-  var core = { activeSchedule: activeSchedule, resolveLayout: resolveLayout, normalizeWidget: normalizeWidget };
+  function screenStatus(screen, at) {
+    if (!screen.enabled) return 'Disabled';
+    var age = Number(at) - Date.parse(screen.last_seen);
+    return age >= 0 && age <= 180000 ? 'Online' : 'Offline';
+  }
+  function filterScreens(screens, filters, at) {
+    var query = String(filters.query || '').trim().toLowerCase();
+    return screens.filter(function (s) {
+      return (!filters.zone || s.zone === filters.zone) &&
+        (!filters.status || screenStatus(s, at) === filters.status) &&
+        (!query || [s.name, s.id, s.zone].join(' ').toLowerCase().indexOf(query) !== -1);
+    });
+  }
+  var core = { activeSchedule: activeSchedule, resolveLayout: resolveLayout, normalizeWidget: normalizeWidget,
+    screenStatus: screenStatus, filterScreens: filterScreens };
   root.SmartSignageCore = core;
   if (typeof module !== 'undefined' && module.exports) module.exports = core;
 })(typeof window !== 'undefined' ? window : globalThis);

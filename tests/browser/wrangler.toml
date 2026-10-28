@@ -1,0 +1,20 @@
+# Local-only test resources and deliberately public test credentials.
+# Run through npm run test:browser; never deploy this configuration.
+name = "norrona-local-browser-tests"
+main = "../../src/worker.js"
+compatibility_date = "2026-09-01"
+[vars]
+ADMIN_PASSWORD = "local-browser-test-password"
+ADMIN_SESSION_SECRET = "local-browser-test-session-key-not-for-production-0123456789"
+[assets]
+directory = "../../public"
+binding = "ASSETS"
+run_worker_first = ["/api/*", "/media/*"]
+[[d1_databases]]
+binding = "DB"
+database_name = "signage-browser-tests"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "../../migrations"
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "signage-browser-tests"

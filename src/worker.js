@@ -14,12 +14,19 @@ async function adminAuth(req,env) {
   const [exp,nonce,sig]=fields; if(!/^\d+$/.test(exp)||!/^[0-9a-f]{32}$/.test(nonce)||Date.now()>Number(exp)||Number(exp)>Date.now()+86400000)return false;
   return equal(await sign(exp+'.'+nonce,env.ADMIN_SESSION_SECRET),sig);
 }
-async function body(req) { const t=await req.text();if(t.length>250000)throw new Error('JSON too large');return JSON.parse(t||'{}'); }
+async function body(req) {
+ const t=await req.text();
+ if(t.length>250000)throw Object.assign(new Error('JSON too large'),{status:413});
+ let value;try{value=JSON.parse(t||'{}');}catch{throw Object.assign(new Error('Invalid JSON body'),{status:400});}
+ if(!value||typeof value!=='object'||Array.isArray(value))throw Object.assign(new Error('JSON body must be an object'),{status:400});
+ return value;
+}
 const name=(x,max=90)=>String(x||'').trim().slice(0,max);
 const color=x=>/^#[a-f\d]{3,8}$/i.test(x||'')?x:'#071220';
-const allowedUrl=x=> typeof x==='string' && (x.startsWith('/media/') && /^\/media\/[a-f0-9-]+$/.test(x) || /^https:\/\/[^\s<>"']+$/i.test(x));
-function validateWidgets(input) {
+const allowedUrl=x=> typeof x==='string' && (/^\/media\/[a-f0-9]{32}$/.test(x) || /^https:\/\/[^\s<>"']+$/i.test(x));
+function validateWidgets(input,orientation='landscape') {
  if(!Array.isArray(input)||input.length>80)throw new Error('Invalid widgets (max 80)');
+ const [width,height]=orientation==='portrait'?[1080,1920]:[1920,1080];
  let videos=0;
  return input.map((w,i)=>{
   if(!['text','clock','image','video','ticker'].includes(w.type))throw new Error('Unknown widget');
@@ -27,7 +34,7 @@ function validateWidgets(input) {
   if(['image','video'].includes(w.type)&&w.src&&!allowedUrl(w.src))throw new Error('Media URL must be HTTPS or hosted library media');
   const clamp=(v,a,b,def)=>Number.isFinite(Number(v))?Math.max(a,Math.min(b,Number(v))):def;
   return {id:/^[a-zA-Z0-9_-]{3,50}$/.test(w.id||'')?w.id:rand(8),type:w.type,
-   x:clamp(w.x,0,1920,0),y:clamp(w.y,0,1080,0),w:clamp(w.w,20,1920,400),h:clamp(w.h,20,1080,150),z:clamp(w.z,0,999,i),
+   x:clamp(w.x,0,width,0),y:clamp(w.y,0,height,0),w:clamp(w.w,20,width,400),h:clamp(w.h,20,height,150),z:clamp(w.z,0,999,i),
    text:name(w.text,2000),src:allowedUrl(w.src)?w.src:'',color:color(w.color)||'#ffffff',background:w.background==='transparent'?'transparent':color(w.background),
    fontSize:clamp(w.fontSize,10,300,48),align:['left','center','right'].includes(w.align)?w.align:'left',fit:['cover','contain'].includes(w.fit)?w.fit:'contain',radius:clamp(w.radius,0,200,0),speed:clamp(w.speed,5,180,40)};
  });
@@ -41,8 +48,9 @@ async function login(req,env) {
  if(rec&&rec.blocked_until>Date.now())return error('Too many attempts. Retry later.',429);
  const j=await body(req);
  if(!equal(await sha256(String(j.password||'')),await sha256(env.ADMIN_PASSWORD))) {
-  const n=(rec?.failures||0)+1;
-  await env.DB.prepare('INSERT INTO login_attempts(ip,failures,blocked_until) VALUES(?,?,?) ON CONFLICT(ip) DO UPDATE SET failures=excluded.failures,blocked_until=excluded.blocked_until').bind(ip,n,n>=5?Date.now()+15*60000:0).run();
+  // Increment inside SQLite, so concurrent requests cannot overwrite failures
+  // with the same count read before password verification.
+  await env.DB.prepare('INSERT INTO login_attempts(ip,failures,blocked_until) VALUES(?,1,0) ON CONFLICT(ip) DO UPDATE SET failures=login_attempts.failures+1,blocked_until=CASE WHEN login_attempts.failures+1>=5 THEN ? ELSE 0 END').bind(ip,Date.now()+15*60000).run();
   return error('Incorrect password',401);
  }
  await env.DB.prepare('DELETE FROM login_attempts WHERE ip=?').bind(ip).run();
@@ -53,10 +61,11 @@ async function adminRoute(req,env,url) {
  const path=url.pathname;const method=req.method;
  if(path==='/api/admin/login'&&method==='POST')return login(req,env);
  if(!await adminAuth(req,env))return error('Not authorised',401);
+ if(path==='/api/admin/screens/bulk'&&method==='PATCH')return bulkScreens(req,env);
  if(path==='/api/admin/overview'&&method==='GET') {
   const [s,l,m,sc]=await Promise.all([
    env.DB.prepare('SELECT COUNT(*) AS total,SUM(CASE WHEN last_seen>=? AND enabled=1 THEN 1 ELSE 0 END) AS online FROM screens').bind(new Date(Date.now()-3*60000).toISOString()).first(),
-   env.DB.prepare('SELECT COUNT(*) n FROM layouts').first(),env.DB.prepare('SELECT COUNT(*) n FROM media').first(),env.DB.prepare('SELECT COUNT(*) n FROM schedules').first()]);
+   env.DB.prepare('SELECT COUNT(*) n FROM layouts').first(),env.DB.prepare('SELECT COUNT(*) n FROM media').first(),env.DB.prepare('SELECT COUNT(*) n FROM schedules WHERE enabled=1').first()]);
   return response({screens:s.total,online:s.online||0,layouts:l.n,media:m.n,schedules:sc.n});
  }
  if(path==='/api/admin/screens'&&method==='GET')return response({items:(await env.DB.prepare('SELECT id,name,zone,orientation,layout_id,last_seen,enabled,version,created_at FROM screens ORDER BY name COLLATE NOCASE').all()).results});
@@ -77,15 +86,17 @@ async function adminRoute(req,env,url) {
   if(!pairing||pairing.claimed_screen_id)return error('Invalid or expired pairing code',404);
   const id=rand(12),token=rand(32), stamp=now();
   await env.DB.batch([
-   env.DB.prepare('INSERT INTO screens(id,name,zone,orientation,layout_id,device_token_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').bind(id,name(j.name)||'New screen',name(j.zone)||'General',j.orientation==='portrait'?'portrait':'landscape',null,await sha256(token),stamp,stamp),
-   env.DB.prepare('UPDATE pairings SET claimed_screen_id=?,claimed_token=? WHERE code=? AND claimed_screen_id IS NULL').bind(id,token,code)
+   env.DB.prepare('INSERT INTO screens(id,name,zone,orientation,layout_id,device_token_hash,created_at,updated_at) SELECT ?,?,?,?,?,?,?,? WHERE EXISTS (SELECT 1 FROM pairings WHERE code=? AND expires_at>? AND claimed_screen_id IS NULL)').bind(id,name(j.name)||'New screen',name(j.zone)||'General',j.orientation==='portrait'?'portrait':'landscape',null,await sha256(token),stamp,stamp,code,stamp),
+   env.DB.prepare('UPDATE pairings SET claimed_screen_id=?,claimed_token=? WHERE code=? AND claimed_screen_id IS NULL AND EXISTS (SELECT 1 FROM screens WHERE id=?)').bind(id,token,code,id)
   ]);
+  const claimed=await env.DB.prepare('SELECT claimed_screen_id FROM pairings WHERE code=?').bind(code).first();
+  if(claimed?.claimed_screen_id!==id)return error('Invalid or expired pairing code',404);
   return response({ok:true,screen_id:id});
  }
  if(path==='/api/admin/layouts'&&method==='GET')return response({items:(await env.DB.prepare('SELECT * FROM layouts ORDER BY updated_at DESC').all()).results.map(mapLayout)});
  if(path==='/api/admin/layouts'&&method==='POST') {
   const j=await body(req);let widgets;
-  try{widgets=validateWidgets(j.widgets||[]);}catch(e){return error(e.message);}
+  try{widgets=validateWidgets(j.widgets||[],j.orientation);}catch(e){return error(e.message);}
   const id=j.id||rand(12);if(!/^[a-zA-Z0-9_-]{3,50}$/.test(id))return error('Invalid layout id');
   const existing=await env.DB.prepare('SELECT version FROM layouts WHERE id=?').bind(id).first();
   const stamp=now();
@@ -135,6 +146,29 @@ async function adminRoute(req,env,url) {
  }
  return error('Not found',404);
 }
+async function bulkScreens(req,env) {
+ const j=await body(req);
+ if(!j||!Array.isArray(j.ids)||!j.ids.length||j.ids.some(id=>typeof id!=='string'||!/^[0-9a-f]{24}$/.test(id)))return error('Choose valid screen ids');
+ const ids=[...new Set(j.ids)],patch=j.patch;
+ const fields=['layout_id','zone','orientation','enabled'];
+ if(!patch||typeof patch!=='object'||Array.isArray(patch)||!Object.keys(patch).length||Object.keys(patch).some(k=>!fields.includes(k)))return error('Invalid screen changes');
+ if('layout_id' in patch&&patch.layout_id!==null){
+  if(typeof patch.layout_id!=='string'||!await env.DB.prepare('SELECT id FROM layouts WHERE id=?').bind(patch.layout_id).first())return error('Layout not found');
+ }
+ if('zone' in patch&&(typeof patch.zone!=='string'||!patch.zone.trim()||patch.zone.trim().length>90))return error('Zone must contain 1–90 characters');
+ if('orientation' in patch&&!['landscape','portrait'].includes(patch.orientation))return error('Invalid orientation');
+ if('enabled' in patch&&typeof patch.enabled!=='boolean')return error('Enabled must be a boolean');
+ const keys=Object.keys(patch),values=keys.map(k=>k==='enabled'?Number(patch[k]):k==='zone'?patch[k].trim():patch[k]);
+ // One JSON parameter avoids D1's SQL bind limit for fleets of 100+ screens.
+ // The count guard and UPDATE run in one statement: a missing id changes nothing.
+ const selection=JSON.stringify(ids);
+ const result=await env.DB.prepare(`UPDATE screens SET ${keys.map(k=>k+'=?').join(',')},updated_at=?
+  WHERE id IN (SELECT value FROM json_each(?))
+  AND (SELECT COUNT(*) FROM screens WHERE id IN (SELECT value FROM json_each(?)))=?
+  RETURNING id`).bind(...values,now(),selection,selection,ids.length).all();
+ if(!result.results.length)return error('One or more screens no longer exist. Refresh and select again.',409);
+ return response({ok:true,updated:result.results.length});
+}
 async function playerRoute(req,env,url) {
  const path=url.pathname;
  if(path==='/api/player/pair/start'&&req.method==='POST') {
@@ -159,13 +193,20 @@ async function playerRoute(req,env,url) {
   const schedules=(await env.DB.prepare('SELECT * FROM schedules WHERE enabled=1 AND (scope=? OR (scope=? AND target=?) OR (scope=? AND target=?))').bind('all','zone',screen.zone,'screen',id).all()).results.map(mapSchedule);
   const relevantIds=new Set([screen.layout_id,...schedules.map(s=>s.layout_id)].filter(Boolean));
   const ids=[...relevantIds];
-  const layoutRows=ids.length?(await env.DB.prepare(`SELECT * FROM layouts WHERE id IN (${ids.map(()=>'?').join(',')})`).bind(...ids).all()).results:[];
+  const layoutRows=ids.length?(await env.DB.prepare('SELECT * FROM layouts WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id').bind(JSON.stringify(ids)).all()).results:[];
   const layouts=layoutRows.map(mapLayout);
-  const refs=new Set();layouts.forEach(l=>l.widgets.forEach(w=>{if(/^\/media\/[0-9a-f]+$/.test(w.src||''))refs.add(w.src.slice(7));}));
+  const refs=new Set();
+  for(const l of layouts)for(const w of l.widgets){
+   if(typeof w.src==='string'&&w.src.startsWith('/media/')){
+    if(!/^\/media\/[0-9a-f]{32}$/.test(w.src))return error('Referenced media URL is invalid',503);
+    refs.add(w.src.slice(7));
+   }
+  }
   const assets=[];
   for(const mediaId of refs) {
    const meta=await env.MEDIA.head(mediaId);
-   if(meta)assets.push({url:'/media/'+mediaId,sha256:meta.customMetadata?.sha256||null,size:meta.size,mime:meta.httpMetadata?.contentType||''});
+   if(!meta||!Number.isSafeInteger(meta.size)||meta.size<1||!/^[0-9a-f]{64}$/.test(meta.customMetadata?.sha256||'')||!['image/jpeg','image/png','image/webp','image/gif','video/mp4'].includes(meta.httpMetadata?.contentType))return error('Referenced media is unavailable or missing integrity metadata',503);
+   assets.push({url:'/media/'+mediaId,sha256:meta.customMetadata.sha256,size:meta.size,mime:meta.httpMetadata.contentType});
   }
   const payload={schema:1,screen:{id:screen.id,name:screen.name,zone:screen.zone,orientation:screen.orientation,layout_id:screen.layout_id},layouts,schedules,assets};
   const etag='"'+await sha256(JSON.stringify(payload))+'"';
@@ -203,5 +244,5 @@ export default {async fetch(req,env) {
    const h=new Headers(r.headers);Object.entries(cors).forEach(([k,v])=>h.set(k,v));return new Response(r.body,{status:r.status,headers:h});
   }
   return env.ASSETS.fetch(req);
- }catch(e){console.error('API error',String(e?.message||e));return error('Internal server error',500);}
+ }catch(e){if(e?.status===400||e?.status===413)return error(e.message,e.status);console.error('API error',String(e?.message||e));return error('Internal server error',500);}
 }};

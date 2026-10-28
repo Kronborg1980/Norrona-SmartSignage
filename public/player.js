@@ -1,18 +1,23 @@
 (function(){'use strict';
 var core=window.SmartSignageCore;
+var previewMode=/(?:^|[?&])preview=1(?:&|$)/.test(location.search);
 var server=(window.SMARTSIGNAGE_SERVER_URL||'').replace(/\/$/,'');
 function endpoint(path){return server+path;}
 var $=id=>document.getElementById(id);
 var credentials=null,active=null,lastEtag='',layoutId='',lastVersion='',pairCode='',assets={},clockTimer=null,pairTimer=null,busy=false,lastSync=0;
 var status='Starting',appVisible=false;
-var shellKey='smartsignage-player-shell-v1',manifestKey='signage-manifest-v1',credKey='signage-device-v1',etagKey='signage-etag-v1';
+var stateKey='signage-state-v2',manifestKey='signage-manifest-v1',credKey='signage-device-v1',etagKey='signage-etag-v1';
 function state(s){status=s;$('debug-state').textContent=s;}
 function show(id){['pair-screen','empty-state'].forEach(x=>$(x).classList.toggle('hidden',x!==id));}
 function create(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e;}
 function store(k,o){try{localStorage.setItem(k,JSON.stringify(o));return true;}catch(e){state('Storage unavailable');return false;}}
 function load(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
 function validCred(o){return o&&/^[a-f0-9]{24}$/.test(o.id)&&/^[a-f0-9]{64}$/.test(o.token);}
-function manifestValid(o){return o&&o.schema===1&&o.screen&&Array.isArray(o.layouts)&&Array.isArray(o.assets)&&Array.isArray(o.schedules);}
+function manifestValid(o){
+ if(!o||o.schema!==1||!o.screen||typeof o.screen.id!=='string'||!Array.isArray(o.layouts)||!Array.isArray(o.assets)||!Array.isArray(o.schedules))return false;
+ if(!o.assets.every(a=>a&&typeof a.url==='string'&&typeof a.sha256==='string'&&/^[a-f0-9]{64}$/.test(a.sha256)&&Number.isInteger(a.size)&&a.size>0)||!o.schedules.every(s=>s&&typeof s.id==='string'))return false;
+ return o.layouts.every(l=>l&&typeof l.id==='string'&&Array.isArray(l.widgets)&&l.widgets.every(w=>w&&typeof w.type==='string'&&(!/^\/media\//.test(w.src||'')||o.assets.some(a=>a.url===w.src))));
+}
 function mediaKey(url){return new URL(endpoint(url),location.href).toString();}
 async function digest(bytes){var result=await crypto.subtle.digest('SHA-256',bytes);return Array.from(new Uint8Array(result),x=>x.toString(16).padStart(2,'0')).join('');}
 async function fetchVerified(manifest){
@@ -31,11 +36,16 @@ async function fetchVerified(manifest){
  return loaded;
 }
 async function getUrls(manifest){
- var next={};if(!('caches' in window))return next;
- var c=await caches.open('signage-media-v1');for(var i=0;i<manifest.assets.length;i++){
-  var x=manifest.assets[i],r=await c.match(mediaKey(x.url));if(!r)throw Error('Cached media missing: '+x.url);
-  if(r.blob)next[x.url]=URL.createObjectURL(await r.blob());
- }return next;
+ var next={};if(!manifest.assets.length)return next;
+ if(!('caches' in window)||!crypto.subtle)throw Error('Offline media storage not supported by device');
+ try{
+  var c=await caches.open('signage-media-v1');for(var i=0;i<manifest.assets.length;i++){
+   var x=manifest.assets[i],r=await c.match(mediaKey(x.url));if(!r)throw Error('Cached media missing: '+x.url);
+   var raw=await r.arrayBuffer();
+   if(raw.byteLength!==x.size||await digest(raw)!==x.sha256)throw Error('Cached media verification failed: '+x.url);
+   next[x.url]=URL.createObjectURL(new Blob([raw],{type:x.mime||'application/octet-stream'}));
+  }return next;
+ }catch(e){freeUrls(next);throw e;}
 }
 function freeUrls(map){Object.keys(map||{}).forEach(k=>URL.revokeObjectURL(map[k]));}
 async function activate(manifest,etag){
@@ -43,8 +53,10 @@ async function activate(manifest,etag){
  await fetchVerified(manifest);
  // Activate only after verified files are available as locally playable Blob URLs.
  var newUrls=await getUrls(manifest);
- if(!store(manifestKey,manifest)){freeUrls(newUrls);throw Error('Cannot save offline manifest');}
- store(etagKey,etag||'');var old=assets;
+ // A single localStorage write commits manifest and ETag together. Separate
+ // records can become mismatched after a crash or storage-quota failure.
+ if(!store(stateKey,{manifest:manifest,etag:etag||''})){freeUrls(newUrls);throw Error('Cannot save offline manifest');}
+ var old=assets;
  assets=newUrls;active=manifest;lastEtag=etag||'';lastVersion=lastEtag;layoutId='';render();freeUrls(old);
  state('Synced · offline-ready');
 }
@@ -52,10 +64,10 @@ function getDimensions(l){return l&&l.orientation==='portrait'?[1080,1920]:[1920
 function resize(){if(!active)return;var l=core.resolveLayout(active,new Date()),dim=getDimensions(l),w=dim[0],h=dim[1];var sx=innerWidth/w,sy=innerHeight/h;var stage=$('stage');stage.style.width=w+'px';stage.style.height=h+'px';var s=Math.min(sx,sy);stage.style.left=((innerWidth-w*s)/2)+'px';stage.style.top=((innerHeight-h*s)/2)+'px';stage.style.transform='scale('+s+')';}
 function render(){if(!active){show('pair-screen');return;}
  var layout=core.resolveLayout(active,new Date());$('debug-name').textContent=active.screen.name||'';
- if(!layout){show('empty-state');$('empty-name').textContent=active.screen.name;clearStage();return;}
+ if(!layout){show('empty-state');$('empty-name').textContent=active.screen.name;layoutId='';clearStage();return;}
  show('');if(layout.id===layoutId)return;layoutId=layout.id;clearStage();var stage=$('stage');stage.style.background=layout.background||'#071220';
  layout.widgets.slice().sort((a,b)=>a.z-b.z).forEach(function(input){
-  var w=core.normalizeWidget(input),elem=create('div','widget');
+  var w=core.normalizeWidget(input,layout.orientation),elem=create('div','widget');
   Object.assign(elem.style,{left:w.x+'px',top:w.y+'px',width:w.w+'px',height:w.h+'px',zIndex:String(w.z),color:w.color,background:w.background,borderRadius:w.radius+'px',fontSize:w.fontSize+'px',textAlign:w.align});
   if(w.type==='text'){
    var t=create('div','text',w.text);t.style.justifyContent=w.align==='center'?'center':w.align==='right'?'flex-end':'flex-start';elem.append(t);
@@ -71,7 +83,7 @@ function render(){if(!active){show('pair-screen');return;}
   }stage.append(elem);
  });resize();appVisible=true;
 }
-function clearStage(){(window._clocks||[]).forEach(clearInterval);window._clocks=[];var stage=$('stage');stage.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});stage.replaceChildren();}
+function clearStage(){(window._clocks||[]).forEach(clearInterval);window._clocks=[];var stage=$('stage');stage.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});while(stage.firstChild)stage.removeChild(stage.firstChild);}
 async function pairingStart(){try{show('pair-screen');var r=await fetch(endpoint('/api/player/pair/start'),{method:'POST'});if(!r.ok)throw Error('Pairing service unavailable');var j=await r.json();pairCode=j.code;$('pair-code').textContent=pairCode;$('pair-status').textContent='Waiting for administrator approval';$('try-again').classList.add('hidden');clearInterval(pairTimer);pairTimer=setInterval(pairingPoll,4000);}catch(e){state('Pairing unavailable');$('pair-status').textContent=e.message;$('try-again').classList.remove('hidden');}}
 async function pairingPoll(){if(!pairCode||busy)return;busy=true;try{var r=await fetch(endpoint('/api/player/pair/status?code='+encodeURIComponent(pairCode)),{cache:'no-store'});if(r.status===410){clearInterval(pairTimer);$('pair-status').textContent='Code expired';$('try-again').classList.remove('hidden');return;}if(!r.ok)throw Error('Pair status failed');var j=await r.json();if(j.paired){credentials={id:j.screen_id,token:j.token};store(credKey,credentials);pairCode='';clearInterval(pairTimer);state('Paired');show('empty-state');setTimeout(sync,0);}}catch(e){state('Waiting for connection');}finally{busy=false;}}
 $('try-again').onclick=pairingStart;
@@ -82,10 +94,28 @@ async function sync(){if(!validCred(credentials)||busy)return;busy=true;lastSync
  }catch(e){state('Offline · playing cached content');if(!active)show('empty-state');}
  finally{busy=false;}
 }
-$('reset-player').onclick=()=>{if(confirm('Forget this display pairing?')){localStorage.removeItem(credKey);localStorage.removeItem(manifestKey);localStorage.removeItem(etagKey);location.reload();}};
-async function start(){if(location.search.indexOf('debug=1')>=0)$('debug').classList.remove('hidden');
+$('reset-player').onclick=()=>{if(confirm('Forget this display pairing?')){localStorage.removeItem(credKey);localStorage.removeItem(stateKey);localStorage.removeItem(manifestKey);localStorage.removeItem(etagKey);location.reload();}};
+async function start(){
+if(previewMode){
+ // Preview uses the actual renderer/resolver without pairing, persistence or sync.
+ window.addEventListener('message',function(e){
+  if(e.origin!==location.origin||e.source!==window.parent||!e.data||e.data.type!=='signage-preview')return;
+  var m=e.data.manifest;
+  if(!m||!m.screen||!Array.isArray(m.layouts)||!Array.isArray(m.schedules)||!m.layouts.every(l=>l&&Array.isArray(l.widgets)))return;
+  active=m;assets={};layoutId='';render();
+ });
+ window.addEventListener('resize',resize);
+ setInterval(function(){if(active)render();},1000);
+ return;
+}
+if(location.search.indexOf('debug=1')>=0)$('debug').classList.remove('hidden');
  if(!server&&'serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{});
- credentials=load(credKey);active=load(manifestKey);lastEtag=load(etagKey)||'';
+ credentials=load(credKey);
+ var saved=load(stateKey);
+ // Legacy manifests remain usable offline; their independently saved ETag is
+ // not trusted, so the first online sync requests a complete manifest.
+ active=saved?saved.manifest:load(manifestKey);lastEtag=saved&&typeof saved.etag==='string'?saved.etag:'';
+ if(!manifestValid(active)){active=null;lastEtag='';}
  if(active&&manifestValid(active)){
   try{assets=await getUrls(active);render();state('Playing last saved content');}catch(e){active=null;lastEtag='';state('Offline media cache incomplete');}
  }

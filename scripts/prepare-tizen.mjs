@@ -3,11 +3,16 @@
    certificate before the resulting app can be installed. */
 import fs from 'node:fs';
 import path from 'node:path';
-const base=process.env.SIGNAGE_SERVER_URL||'';
-if(!/^https:\/\/[^/?#]+$/i.test(base)){
+let base;
+try {
+ const url=new URL(process.env.SIGNAGE_SERVER_URL||'');
+ if(url.protocol!=='https:'||url.username||url.password||url.pathname!=='/'||url.search||url.hash||!/^([a-z\d.-]+|\[[a-f\d:.]+\])$/i.test(url.hostname))throw new Error('Invalid origin');
+ base=url.origin;
+} catch {
  console.error('Set SIGNAGE_SERVER_URL to the deployed HTTPS origin (e.g. https://signage.example.com).');
  process.exit(1);
 }
+const xmlOrigin=base.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&apos;');
 const root=path.resolve('build/tizen');fs.mkdirSync(root,{recursive:true});
 for(const file of ['player.html','player.css','player.js','shared.js']){
  fs.copyFileSync(path.join('public',file),path.join(root,file==='player.html'?'index.html':file));
@@ -22,7 +27,7 @@ fs.writeFileSync(path.join(root,'config.xml'),`<?xml version="1.0" encoding="UTF
   <content src="index.html"/>
   <name>Norrona Smart Player</name>
   <tizen:privilege name="http://tizen.org/privilege/internet"/>
-  <access origin="${base}" subdomains="false"/>
+  <access origin="${xmlOrigin}" subdomains="false"/>
   <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable" hwkey-event="enable"/>
 </widget>\n`);
 console.log('Unsigned Tizen source staged at build/tizen. Replace IDs, sign and test in Tizen Studio.');

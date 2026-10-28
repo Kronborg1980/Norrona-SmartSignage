@@ -1,6 +1,6 @@
 # Norröna SmartSignage – GitHub + Cloudflare (browsertest)
 
-**Status: Klar til at blive lagt i GitHub. En Cloudflare-test kræver, at du først opretter D1, R2 og secrets.**
+**Eksisterende projekt: GitHub og Cloudflare Workers med D1/R2 er allerede deployet ifølge brugeren. Trin 1–5 nedenfor er en installationsreference til nye miljøer. Genbrug de eksisterende ressourcer og secrets; begynd ved trin 6 for browsertest. Automatiske lokale tests beskrives i [docs/BROWSER_TEST_DA.md](docs/BROWSER_TEST_DA.md).**
 
 > Dette er et pilotprojekt. Det er ikke installeret på jeres Samsung-skærme. 100 skærme er et mål, ikke en allerede godkendt kapacitet.
 
@@ -76,8 +76,8 @@ Brug den adresse, Cloudflare har tildelt. Eksempler nedenfor er **ikke** aktive 
 ## 7. Hvad må vi ikke forvente endnu?
 
 - Skærminstallation på Samsung Tizen via Custom App-URL er **ikke klar**.
-- Ingen faktisk Cloudflare-udrulning eller browser-E2E-test er endnu dokumenteret som gennemført.
-- Avancerede widgets, dansk ?-hjælp ved hver funktion, fuld dokumentkonvertering, multi-user og 100-skærms-belastningstest mangler.
+- Den aktive Cloudflare-udrulning er oplyst af brugeren; denne udviklingsrunde tester lokalt og ændrer ikke deployment.
+- Avancerede widgets, dansk ?-hjælp ved hver funktion, fuld dokumentkonvertering og multi-user mangler. Lokal test med 100 virtuelle HTTP-players erstatter ikke realistisk belastningstest med store medier og fysisk hardware.
 - Det offline-player-understøttelse som findes er **best-effort** og afhænger af browserens cache/storage, ikke garanteret 24/7-skibsdrift.
 - Brug testindhold, ikke fortrolige eller operationelle data, indtil adgangskontrol og driftssikkerhed er gennemgået yderligere.
 
