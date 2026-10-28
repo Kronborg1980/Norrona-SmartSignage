@@ -99,7 +99,7 @@ test('malformed, nonobject and oversized JSON requests return client errors',asy
  const {env,close}=makeEnv();try{
   const admin=await login(env);
   for(const payload of ['{bad json','null','[]','42'])assert.equal((await request(env,'/api/admin/layouts','POST',payload,admin)).status,400);
-  assert.equal((await request(env,'/api/admin/layouts','POST','x'.repeat(250001),admin)).status,413);
+  assert.equal((await request(env,'/api/admin/layouts','POST','x'.repeat(1024*1024+1),admin)).status,413);
   assert.equal((await request(env,'/api/admin/login','POST','{bad json')).status,400);
  }finally{close();}
 });

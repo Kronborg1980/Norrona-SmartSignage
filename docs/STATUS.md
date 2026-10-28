@@ -2,7 +2,7 @@
 
 ## Latest bug review
 
-**34 Node tests and 14 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
+**36 Node tests and 15 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
 
 The review fixed concurrency errors in pairing/login, editor data corruption, offline integrity/state recovery, portrait geometry, schedule-target changes, SQL parameter limits and smaller API/tooling defects. See [the detailed review](REVIEW_2026-10-28.md), which also records unresolved fetch-timeout, cache-cleanup, pairing-persistence and screen-rotation issues. These remain limitations; the system is not certified for shipboard production.
 
@@ -56,3 +56,9 @@ Layout Studio now supports HTML/CSS/JavaScript code and hosted HTTPS page widget
 ## Typography and media source controls
 
 Added 18 font choices with 8 fonts bundled for offline use (licenses and source versions included), bold/italic/underline, alignment, line height, letter spacing, opacity, corner radius, ticker speed, layer duplication and backward controls. Text formatting applies per layer. Image/video Inspector now allows external links, selection from uploaded library media, or direct upload and assignment. API validation, persistence, preview styles, bundled font loading offline and image/video upload selection are covered by new tests. Native-font availability and physical Tizen rendering still require device checks.
+
+## Large HTML widgets
+
+HTML source now supports 512 KiB UTF-8 per widget; layout POSTs accept up to 1 MiB, with bounded streaming reads and clear errors. Other JSON endpoints keep a 250,000-byte limit. The user-provided 274,999-byte widget saved and round-tripped exactly in an isolated SQLite API check; its source is not copied into the repository. A browser regression exercises a 280 KB layout and explicit external HTTPS permission, while preserving sandbox storage isolation. Live external API access/CORS has not been verified here.
+
+The accepted bookings/channel model (whole-layout or fullscreen content on screens, content bookings inside channels) is documented in BOOKING_CHANNEL_MODEL.md; this release does not implement that redesign.

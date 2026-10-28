@@ -14,9 +14,15 @@ async function adminAuth(req,env) {
   const [exp,nonce,sig]=fields; if(!/^\d+$/.test(exp)||!/^[0-9a-f]{32}$/.test(nonce)||Date.now()>Number(exp)||Number(exp)>Date.now()+86400000)return false;
   return equal(await sign(exp+'.'+nonce,env.ADMIN_SESSION_SECRET),sig);
 }
+const MAX_HTML_BYTES=512*1024, MAX_LAYOUT_BYTES=1024*1024;
 async function body(req) {
- const t=await req.text();
- if(t.length>250000)throw Object.assign(new Error('JSON too large'),{status:413});
+ const limit=new URL(req.url).pathname==='/api/admin/layouts'&&req.method==='POST'?MAX_LAYOUT_BYTES:250000;
+ const tooLarge=()=>Object.assign(new Error(limit===MAX_LAYOUT_BYTES?'Layout exceeds 1 MiB. Reduce embedded code or media.':'Request JSON exceeds 250000 bytes'),{status:413});
+ if(Number(req.headers.get('content-length'))>limit)throw tooLarge();
+ const reader=req.body?.getReader();let length=0,chunks=[];
+ if(reader){try{while(true){const {value,done}=await reader.read();if(done)break;length+=value.byteLength;if(length>limit){await reader.cancel();throw tooLarge();}chunks.push(value);}}finally{reader.releaseLock();}}
+ const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ const t=new TextDecoder().decode(bytes);
  let value;try{value=JSON.parse(t||'{}');}catch{throw Object.assign(new Error('Invalid JSON body'),{status:400});}
  if(!value||typeof value!=='object'||Array.isArray(value))throw Object.assign(new Error('JSON body must be an object'),{status:400});
  return value;
@@ -32,7 +38,7 @@ function validateWidgets(input,orientation='landscape') {
   if(!['text','clock','image','video','ticker','html','webpage'].includes(w.type))throw new Error('Unknown widget');
   if(w.type==='video'&&++videos>1)throw new Error('Only one video per layout on Tizen');
   if(['image','video'].includes(w.type)&&w.src&&!allowedUrl(w.src))throw new Error('Media URL must be HTTPS or hosted library media');
-  if(w.type==='html'&&(typeof w.html!=='string'||w.html.length>20000))throw new Error('HTML code must be a string of at most 20000 characters');
+  if(w.type==='html'&&(typeof w.html!=='string'||new TextEncoder().encode(w.html).byteLength>MAX_HTML_BYTES))throw new Error('HTML code must be text of at most 512 KiB (UTF-8)');
   if(w.type==='html'&&/<\?(?:php|=)/i.test(w.html))throw new Error('PHP runs on a server. Use a Web page widget with the hosted HTTPS URL.');
   if(w.type==='webpage'){
    try{const u=new URL(w.src);if(u.protocol!=='https:'||u.username||u.password)throw Error();}catch{throw new Error('Web page widgets require an HTTPS URL without credentials');}
@@ -40,7 +46,7 @@ function validateWidgets(input,orientation='landscape') {
   const clamp=(v,a,b,def)=>Number.isFinite(Number(v))?Math.max(a,Math.min(b,Number(v))):def;
   return {id:/^[a-zA-Z0-9_-]{3,50}$/.test(w.id||'')?w.id:rand(8),type:w.type,
    x:clamp(w.x,0,width,0),y:clamp(w.y,0,height,0),w:clamp(w.w,20,width,400),h:clamp(w.h,20,height,150),z:clamp(w.z,0,999,i),
-   html:w.type==='html'?w.html:'',text:name(w.text,2000),src:w.type==='webpage'?new URL(w.src).href:allowedUrl(w.src)?w.src:'',color:color(w.color)||'#ffffff',background:w.background==='transparent'?'transparent':color(w.background),
+   html:w.type==='html'?w.html:'',htmlNetwork:w.type==='html'&&w.htmlNetwork===true,text:name(w.text,2000),src:w.type==='webpage'?new URL(w.src).href:allowedUrl(w.src)?w.src:'',color:color(w.color)||'#ffffff',background:w.background==='transparent'?'transparent':color(w.background),
    fontFamily:['Arial','Helvetica','Verdana','Tahoma','Trebuchet MS','Times New Roman','Georgia','Courier New','Impact','Comic Sans MS','Inter','Roboto','Open Sans','Lato','Montserrat','Poppins','Raleway','Noto Sans'].includes(w.fontFamily)?w.fontFamily:'Arial',
    bold:w.bold===true,italic:w.italic===true,underline:w.underline===true,
    lineHeight:clamp(w.lineHeight,0.8,3,1.16),letterSpacing:clamp(w.letterSpacing,-5,30,0),verticalAlign:['top','middle','bottom'].includes(w.verticalAlign)?w.verticalAlign:'middle',opacity:clamp(w.opacity,0,1,1),
@@ -106,6 +112,7 @@ async function adminRoute(req,env,url) {
   const j=await body(req);let widgets;
   try{widgets=validateWidgets(j.widgets||[],j.orientation);}catch(e){return error(e.message);}
   const id=j.id||rand(12);if(!/^[a-zA-Z0-9_-]{3,50}$/.test(id))return error('Invalid layout id');
+  if(new TextEncoder().encode(JSON.stringify(widgets)).byteLength>MAX_LAYOUT_BYTES)return error('Layout widget data exceeds 1 MiB',413);
   const existing=await env.DB.prepare('SELECT version FROM layouts WHERE id=?').bind(id).first();
   const stamp=now();
   await env.DB.prepare('INSERT INTO layouts(id,name,orientation,background,widgets_json,version,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,orientation=excluded.orientation,background=excluded.background,widgets_json=excluded.widgets_json,version=excluded.version,updated_at=excluded.updated_at')

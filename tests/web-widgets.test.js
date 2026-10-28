@@ -8,7 +8,7 @@ test('HTML and hosted page widgets validate code, URL and PHP boundaries',()=>{
  assert.equal(validateWidgets([{type:'webpage',src:'https://example.com/widget.php'}])[0].src,'https://example.com/widget.php');
  for(const src of ['javascript:alert(1)','data:text/html,test','http://example.com','https://user:pass@example.com','/api/admin/screens'])assert.throws(()=>validateWidgets([{type:'webpage',src}]),/HTTPS/);
  assert.throws(()=>validateWidgets([{type:'html',html:'<?php echo 1; ?>'}]),/PHP runs on a server/);
- assert.throws(()=>validateWidgets([{type:'html',html:'a'.repeat(20001)}]),/20000/);
+ assert.throws(()=>validateWidgets([{type:'html',html:'a'.repeat(512*1024+1)}]),/512 KiB/);
 });
 test('custom HTML survives layout persistence and authenticated player sync',async()=>{
  const {env,close}=makeEnv();try{

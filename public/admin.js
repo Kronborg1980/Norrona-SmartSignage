@@ -106,7 +106,10 @@ $('save-layout').onclick=async()=>{
  if(!editing||$('save-layout').disabled)return;
  var saving=editing;
  saving.name=$('layout-name').value.trim()||'Untitled layout';saving.background=$('layout-bg').value;saving.orientation=$('layout-orientation').value;
- var payload=JSON.parse(JSON.stringify(saving));$('save-layout').disabled=true;
+ var payload=JSON.parse(JSON.stringify(saving));
+ if(new TextEncoder().encode(JSON.stringify(payload)).byteLength>1024*1024)return notify('Layout exceeds 1 MiB. Reduce embedded code or media.',true);
+ if(payload.widgets.some(w=>w.type==='html'&&new TextEncoder().encode(w.html||'').byteLength>512*1024))return notify('An HTML widget exceeds 512 KiB.',true);
+ $('save-layout').disabled=true;
  try{var r=await api('/api/admin/layouts','POST',payload);saving.id=r.id;saving.version=r.version;notify('Layout saved, version '+r.version);await refresh();}
  catch(e){notify(e.message,true);}finally{$('save-layout').disabled=false;}
 };
@@ -120,8 +123,11 @@ function renderInspector(){var c=$('inspector');clear(c);var w=editing.widgets.f
  c.append(el('strong',{text:w.type.toUpperCase()+' · LAYER'}));
  if(w.type==='html'){
   var code=el('textarea',{'aria-label':'HTML / CSS / JavaScript code',rows:'12',spellcheck:'false'});code.value=w.html||'';
-  code.oninput=()=>{w.html=code.value;};c.append(labeled('HTML / CSS / JavaScript code',code));
-  c.append(el('p',{class:'muted',text:'Self-contained HTML, inline CSS and JavaScript. PHP needs a hosted server. External requests and embeds are blocked in HTML widgets.'}));
+  var size=el('p',{class:'muted','aria-live':'polite'});
+  function codeSize(){var bytes=new TextEncoder().encode(code.value).byteLength;size.textContent=(bytes/1024).toFixed(1)+' / 512 KiB';size.classList.toggle('error',bytes>512*1024);}
+  code.oninput=()=>{w.html=code.value;codeSize();};codeSize();c.append(labeled('HTML / CSS / JavaScript code',code),size);
+  var network=el('input',{type:'checkbox','aria-label':'Allow external HTTPS resources'});network.checked=w.htmlNetwork===true;network.onchange=()=>{w.htmlNetwork=network.checked;renderCanvas();};c.append(el('label',{class:'checkline'},[network,' Allow external HTTPS resources']));
+  c.append(el('p',{class:'muted',text:'HTML limit: 512 KiB; layout request: 1 MiB. Enable external HTTPS resources for libraries, fonts and live APIs. Network access requires connectivity and the API’s CORS permission. PHP needs a hosted server.'}));
   c.append(el('button',{class:'secondary',text:'Update code preview',onclick:()=>renderCanvas()}));
  }
  if(w.type==='webpage'){field('Hosted HTTPS page URL','src');c.append(el('p',{class:'muted',text:'For hosted HTML/PHP pages. Requires network; the site must allow iframe embedding.'}));}

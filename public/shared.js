@@ -44,7 +44,7 @@
       w: Math.max(20, Math.min(width, Number(w.w) || 400)),
       h: Math.max(20, Math.min(height, Number(w.h) || 150)),
       z: Math.max(0, Math.min(999, Number(w.z) || 0)),
-      html: String(w.html || ''), text: String(w.text || ''), src: String(w.src || ''),
+      html: String(w.html || ''), htmlNetwork: w.htmlNetwork === true, text: String(w.text || ''), src: String(w.src || ''),
       color: String(w.color || '#ffffff'), background: String(w.background || 'transparent'),
       fontFamily: String(w.fontFamily || 'Arial'), bold: w.bold === true, italic: w.italic === true, underline: w.underline === true,
       lineHeight: Math.max(0.8, Math.min(3, Number(w.lineHeight) || 1.16)),
@@ -70,7 +70,9 @@
     frame.setAttribute('title', w.type === 'html' ? 'Custom HTML widget' : 'Hosted web page widget');
     frame.style.width = '100%'; frame.style.height = '100%'; frame.style.border = '0';
     if (w.type === 'html') {
-      frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data:; font-src data:; media-src data:; connect-src \'none\'; frame-src \'none\'; base-uri \'none\'; form-action \'none\'"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style>' + String(w.html || '');
+      var https = w.htmlNetwork === true ? ' https:' : '';
+      var policy = "default-src 'none'; script-src 'unsafe-inline'" + https + "; style-src 'unsafe-inline'" + https + "; img-src data:" + https + "; font-src data:" + https + "; media-src data:" + https + "; connect-src " + (https ? 'https:' : "'none'") + "; frame-src 'none'; base-uri 'none'; form-action 'none'";
+      frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + policy + '"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}</style>' + String(w.html || '');
     } else {
       try { var url = new URL(w.src); if (url.protocol === 'https:' && !url.username && !url.password) frame.src = url.href; } catch (e) {}
     }
