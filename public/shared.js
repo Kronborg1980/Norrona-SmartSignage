@@ -46,11 +46,22 @@
       z: Math.max(0, Math.min(999, Number(w.z) || 0)),
       html: String(w.html || ''), text: String(w.text || ''), src: String(w.src || ''),
       color: String(w.color || '#ffffff'), background: String(w.background || 'transparent'),
+      fontFamily: String(w.fontFamily || 'Arial'), bold: w.bold === true, italic: w.italic === true, underline: w.underline === true,
+      lineHeight: Math.max(0.8, Math.min(3, Number(w.lineHeight) || 1.16)),
+      letterSpacing: Math.max(-5, Math.min(30, Number(w.letterSpacing) || 0)),
+      verticalAlign: ['top','middle','bottom'].indexOf(w.verticalAlign) >= 0 ? w.verticalAlign : 'middle',
+      opacity: w.opacity == null ? 1 : Math.max(0, Math.min(1, Number(w.opacity))),
       fontSize: Math.max(10, Math.min(300, Number(w.fontSize) || 48)),
       align: String(w.align || 'left'), fit: String(w.fit || 'contain'),
       radius: Math.max(0, Math.min(200, Number(w.radius) || 0)),
       speed: Math.max(5, Math.min(180, Number(w.speed) || 40))
     };
+  }
+  var fonts = ['Arial','Helvetica','Verdana','Tahoma','Trebuchet MS','Times New Roman','Georgia','Courier New','Impact','Comic Sans MS','Inter','Roboto','Open Sans','Lato','Montserrat','Poppins','Raleway','Noto Sans'];
+  function widgetStyle(w) {
+    return {fontFamily: JSON.stringify(fonts.indexOf(w.fontFamily) >= 0 ? w.fontFamily : 'Arial') + ', sans-serif',
+      fontWeight: w.bold ? '700' : '400', fontStyle: w.italic ? 'italic' : 'normal', textDecoration: w.underline ? 'underline' : 'none',
+      lineHeight: String(w.lineHeight == null ? 1.16 : w.lineHeight), letterSpacing: (w.letterSpacing || 0) + 'px', opacity: String(w.opacity == null ? 1 : w.opacity)};
   }
   function webWidget(w) {
     var frame = document.createElement('iframe');
@@ -79,7 +90,7 @@
     });
   }
   var core = { activeSchedule: activeSchedule, resolveLayout: resolveLayout, normalizeWidget: normalizeWidget,
-    webWidget: webWidget, screenStatus: screenStatus, filterScreens: filterScreens };
+    fonts: fonts, widgetStyle: widgetStyle, webWidget: webWidget, screenStatus: screenStatus, filterScreens: filterScreens };
   root.SmartSignageCore = core;
   if (typeof module !== 'undefined' && module.exports) module.exports = core;
 })(typeof window !== 'undefined' ? window : globalThis);

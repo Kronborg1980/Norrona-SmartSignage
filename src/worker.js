@@ -41,6 +41,9 @@ function validateWidgets(input,orientation='landscape') {
   return {id:/^[a-zA-Z0-9_-]{3,50}$/.test(w.id||'')?w.id:rand(8),type:w.type,
    x:clamp(w.x,0,width,0),y:clamp(w.y,0,height,0),w:clamp(w.w,20,width,400),h:clamp(w.h,20,height,150),z:clamp(w.z,0,999,i),
    html:w.type==='html'?w.html:'',text:name(w.text,2000),src:w.type==='webpage'?new URL(w.src).href:allowedUrl(w.src)?w.src:'',color:color(w.color)||'#ffffff',background:w.background==='transparent'?'transparent':color(w.background),
+   fontFamily:['Arial','Helvetica','Verdana','Tahoma','Trebuchet MS','Times New Roman','Georgia','Courier New','Impact','Comic Sans MS','Inter','Roboto','Open Sans','Lato','Montserrat','Poppins','Raleway','Noto Sans'].includes(w.fontFamily)?w.fontFamily:'Arial',
+   bold:w.bold===true,italic:w.italic===true,underline:w.underline===true,
+   lineHeight:clamp(w.lineHeight,0.8,3,1.16),letterSpacing:clamp(w.letterSpacing,-5,30,0),verticalAlign:['top','middle','bottom'].includes(w.verticalAlign)?w.verticalAlign:'middle',opacity:clamp(w.opacity,0,1,1),
    fontSize:clamp(w.fontSize,10,300,48),align:['left','center','right'].includes(w.align)?w.align:'left',fit:['cover','contain'].includes(w.fit)?w.fit:'contain',radius:clamp(w.radius,0,200,0),speed:clamp(w.speed,5,180,40)};
  });
 }

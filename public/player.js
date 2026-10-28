@@ -69,11 +69,12 @@ function render(){if(!active){show('pair-screen');return;}
  layout.widgets.slice().sort((a,b)=>a.z-b.z).forEach(function(input){
   var w=core.normalizeWidget(input,layout.orientation),elem=create('div','widget');
   Object.assign(elem.style,{left:w.x+'px',top:w.y+'px',width:w.w+'px',height:w.h+'px',zIndex:String(w.z),color:w.color,background:w.background,borderRadius:w.radius+'px',fontSize:w.fontSize+'px',textAlign:w.align});
+  Object.assign(elem.style,core.widgetStyle(w));
   if(w.type==='html'||w.type==='webpage'){elem.append(core.webWidget(w));
   }else if(w.type==='text'){
-   var t=create('div','text',w.text);t.style.justifyContent=w.align==='center'?'center':w.align==='right'?'flex-end':'flex-start';elem.append(t);
+   var t=create('div','text',w.text);t.style.lineHeight='inherit';t.style.alignItems=w.verticalAlign==='top'?'flex-start':w.verticalAlign==='bottom'?'flex-end':'center';t.style.justifyContent=w.align==='center'?'center':w.align==='right'?'flex-end':'flex-start';elem.append(t);
   }else if(w.type==='clock'){
-   var t=create('div','clock');elem.append(t);t.style.justifyContent='center';
+   var t=create('div','clock');elem.append(t);t.style.lineHeight='inherit';t.style.alignItems=w.verticalAlign==='top'?'flex-start':w.verticalAlign==='bottom'?'flex-end':'center';t.style.justifyContent=w.align==='left'?'flex-start':w.align==='right'?'flex-end':'center';
    var tick=()=>t.textContent=new Date().toISOString().slice(11,16)+' UTC';tick();(window._clocks=window._clocks||[]).push(setInterval(tick,1000));
   }else if(w.type==='ticker'){
    var wrap=create('div','ticker');var span=create('span','',w.text);span.style.animationDuration=Math.max(8,(w.text.length+40)*100/w.speed/2)+'s';wrap.append(span);elem.append(wrap);

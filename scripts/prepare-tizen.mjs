@@ -14,9 +14,10 @@ try {
 }
 const xmlOrigin=base.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&apos;');
 const root=path.resolve('build/tizen');fs.mkdirSync(root,{recursive:true});
-for(const file of ['player.html','player.css','player.js','shared.js']){
+for(const file of ['player.html','player.css','player.js','shared.js','fonts.css']){
  fs.copyFileSync(path.join('public',file),path.join(root,file==='player.html'?'index.html':file));
 }
+fs.cpSync(path.join('public','fonts'),path.join(root,'fonts'),{recursive:true});
 fs.writeFileSync(path.join(root,'player-config.js'),`window.SMARTSIGNAGE_SERVER_URL = ${JSON.stringify(base)};\n`);
 // The default development ID is a placeholder. Replace using Tizen Studio wizard.
 const packageId='A1B2C3D4E5';

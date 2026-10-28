@@ -52,6 +52,14 @@ Run automated tests:
 npm test
 ```
 
+## Text styling and media sources
+
+Select a text, ticker or clock layer to choose a font, bold, italic, underline, size, colour, horizontal/vertical alignment, line height and letter spacing. Formatting applies to the selected layer. Text supports multiple lines. Opacity and corner radius apply to layers; ticker speed, Duplicate and forward/backward layer controls are available in Inspector.
+
+18 common font choices are available. **Inter, Roboto, Open Sans, Lato, Montserrat, Poppins, Raleway and Noto Sans** are bundled in regular/bold, normal/italic Latin variants with their licenses (about 616 KB total). They are included in the offline browser shell and Tizen source bundle. Arial, Helvetica, Verdana, Tahoma, Trebuchet MS, Times New Roman, Georgia, Courier New, Impact and Comic Sans MS use installed display fonts with browser fallback. Exact availability of these system fonts varies by display; no Google Fonts network access is required. Package versions and provenance are recorded in `public/fonts/sources.json`.
+
+Image/video Inspector supports **three sources**: an HTTPS link, **Uploaded media** to select an existing compatible library file, or **Upload image/video** to upload and assign directly to the layer. Global Media Library upload remains available. Uploads use R2 with the existing 25 MB limit and supported formats (JPG/PNG/WebP/GIF/MP4); uploaded files can be cached and verified by players after sync. External links need network. Save the layout after selecting/uploading media.
+
 ## Custom HTML and hosted web widgets
 
 In Layout Studio choose **HTML code**, paste HTML with inline CSS/JavaScript in Inspector, and click **Update code preview**. Resize/move it like other layers, then **Save layout**. Up to 20,000 code characters per widget are supported within the layout request limit. Self-contained code is stored with the manifest and works offline after a successful sync. Embedded data images/fonts/media are supported; external requests, scripts, stylesheets, nested frames and forms are blocked by the HTML widget policy. Widget scripts cannot access backoffice/player storage or navigate the top-level page.

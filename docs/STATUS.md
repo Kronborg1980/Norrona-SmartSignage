@@ -2,7 +2,7 @@
 
 ## Latest bug review
 
-**32 Node tests and 12 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
+**34 Node tests and 14 Chromium tests pass**, including 100 concurrent virtual players and rejection/recovery of corrupt media updates. `npm audit` reports **0 known vulnerabilities** in the installed lockfile. Syntax and whitespace checks pass.
 
 The review fixed concurrency errors in pairing/login, editor data corruption, offline integrity/state recovery, portrait geometry, schedule-target changes, SQL parameter limits and smaller API/tooling defects. See [the detailed review](REVIEW_2026-10-28.md), which also records unresolved fetch-timeout, cache-cleanup, pairing-persistence and screen-rotation issues. These remain limitations; the system is not certified for shipboard production.
 
@@ -52,3 +52,7 @@ Layout Studio supports four corner resize handles, explicit Width/Height, contai
 ## HTML and hosted-page widgets
 
 Layout Studio now supports HTML/CSS/JavaScript code and hosted HTTPS page widgets (including server-rendered PHP). Sandboxed iframes isolate scripts from application storage; inline widgets block external requests. Node tests cover validation and manifest persistence, and Chromium checks code execution, isolation, editor/player preview, hosted-page iframe configuration and offline reload of saved HTML. No PHP runtime or ZIP installer is added; hosted pages require network and permission to embed.
+
+## Typography and media source controls
+
+Added 18 font choices with 8 fonts bundled for offline use (licenses and source versions included), bold/italic/underline, alignment, line height, letter spacing, opacity, corner radius, ticker speed, layer duplication and backward controls. Text formatting applies per layer. Image/video Inspector now allows external links, selection from uploaded library media, or direct upload and assignment. API validation, persistence, preview styles, bundled font loading offline and image/video upload selection are covered by new tests. Native-font availability and physical Tizen rendering still require device checks.
