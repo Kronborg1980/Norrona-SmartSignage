@@ -1,6 +1,6 @@
 (function(){'use strict';
 var token=sessionStorage.getItem('signage-admin-token')||'';
-var data={screens:[],layouts:[],schedules:[],media:[],channels:[],bookings:[],content:[],programmingAvailable:false},view='overview',editing=null,selected=null,bookingDesign=null;
+var data={screens:[],layouts:[],schedules:[],media:[],channels:[],bookings:[],content:[],programmingAvailable:false},view='plan',editing=null,selected=null,bookingDesign=null;
 var $=id=>document.getElementById(id);
 var fleetSelection=new Set(),visibleScreens=[];
 var core=window.SmartSignageCore;
@@ -27,11 +27,11 @@ async function api(url,method='GET',body){var opts={method,headers:{Authorizatio
 function logout(){closePreview();fleetSelection.clear();sessionStorage.removeItem('signage-admin-token');token='';$('app').classList.add('hidden');$('login').classList.remove('hidden');}
 function enter(){ $('login').classList.add('hidden');$('app').classList.remove('hidden');refresh();}
 $('login-form').onsubmit=async e=>{e.preventDefault();$('login-error').textContent='';try{var r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('password').value})});var j=await r.json();if(!r.ok)throw Error(j.error||'Access denied');token=j.token;sessionStorage.setItem('signage-admin-token',token);$('password').value='';enter();}catch(err){$('login-error').textContent=err.message;}};
-var programmingUI=window.createProgrammingUI({data,el,option,labeled,inp,api,core,openModal,modalCurrent:generation=>generation===modalGeneration,notify,refresh,uploadFile,designBooking:beginBookingDesign,previewScreen,editScreen,show,preview:previewManifest,channelsChanged:()=>{if(view==='layouts'&&editing){renderCanvas();renderLayers();if(editing.widgets.some(w=>w.id===selected&&w.type==='channel'))renderInspector();}}});
+var programmingUI=window.createProgrammingUI({data,el,option,labeled,inp,api,core,openModal,modalCurrent:generation=>generation===modalGeneration,notify,refresh,uploadFile,designBooking:beginBookingDesign,currentView:()=>view,previewScreen,editScreen,show,preview:previewManifest,channelsChanged:()=>{if(view==='layouts'&&editing){renderCanvas();renderLayers();if(editing.widgets.some(w=>w.id===selected&&w.type==='channel'))renderInspector();}}});
 $('logout').onclick=logout;if(token)enter();
 async function refresh(){try{var results=await Promise.all([api('/api/admin/overview'),api('/api/admin/screens'),api('/api/admin/layouts'),api('/api/admin/schedules'),api('/api/admin/media'),api('/api/admin/programming')]);data.screens=results[1].items;data.layouts=results[2].items;data.schedules=results[3].items;data.media=results[4].items;data.programmingAvailable=results[5].available===true;data.channels=results[5].channels||[];data.content=results[5].content||[];data.bookings=results[5].bookings||[];$('stat-screens').textContent=results[0].screens;$('stat-online').textContent=results[0].online;$('stat-layouts').textContent=results[0].layouts;$('stat-schedules').textContent=results[0].schedules;$('screen-pill').textContent=data.screens.length;renderScreens();renderLayoutOptions();renderSchedules();renderMedia();programmingUI.render();}catch(e){notify(e.message,true);}}
-var titles={plan:['PLANNING','Plan & play'],overview:['OVERVIEW','Fleet overview'],screens:['DISPLAYS','Display fleet'],layouts:['STUDIO','Layout Studio'],channels:['CHANNELS','Reusable channels'],bookings:['BOOKINGS','Content bookings'],content:['CONTENT','Reusable content'],schedules:['SCHEDULING','Content scheduling'],media:['LIBRARY','Media Library']};
-function show(v){view=v;document.querySelectorAll('.view').forEach(n=>n.classList.toggle('hidden',n.id!=='view-'+v));document.querySelectorAll('#nav button').forEach(n=>n.classList.toggle('active',n.dataset.view===v));$('crumb').textContent=titles[v][0];$('page-title').textContent=titles[v][1];if(v==='layouts'&&editing)renderEditor();if(v==='plan')programmingUI.renderPlan();}
+var titles={plan:['SCREEN CONTENT','Screen content'],overview:['OVERVIEW','Fleet overview'],screens:['DISPLAYS','Display fleet'],layouts:['STUDIO','Layout Studio'],channels:['PLAYLISTS','Shared playlists'],bookings:['BOOKINGS','Content bookings'],content:['CONTENT','Reusable content'],schedules:['SCHEDULING','Content scheduling'],media:['LIBRARY','Media Library']};
+function show(v){view=v;var advanced=$('nav-advanced');if(advanced.querySelector('[data-view="'+v+'"]'))advanced.open=true;document.querySelectorAll('.view').forEach(n=>n.classList.toggle('hidden',n.id!=='view-'+v));document.querySelectorAll('#nav button').forEach(n=>n.classList.toggle('active',n.dataset.view===v));$('crumb').textContent=titles[v][0];$('page-title').textContent=titles[v][1];if(v==='layouts'&&editing)renderEditor();if(v==='plan')programmingUI.renderPlan();}
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>show(b.dataset.view));document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
 function clock(){ $('utc-clock').textContent=new Date().toISOString().replace('T',' ').slice(0,19)+' UTC';}clock();setInterval(clock,1000);setInterval(()=>{if(token)refresh();},60000);
 function option(value,label){return el('option',{value,text:label});}
@@ -59,7 +59,7 @@ function renderScreens(){
   check.onchange=()=>{if(check.checked)fleetSelection.add(s.id);else fleetSelection.delete(s.id);updateFleetSelection();};
   var layoutSel=selectOptions(data.layouts,s.layout_id,'No layout');layoutSel.setAttribute('aria-label','Layout for '+s.name);
   layoutSel.onchange=async()=>{layoutSel.disabled=true;try{await api('/api/admin/screens/bulk','PATCH',{ids:[s.id],patch:{layout_id:layoutSel.value||null}});notify('Layout assigned to '+s.name);await refresh();}catch(e){layoutSel.value=s.layout_id||'';notify(e.message,true);}finally{layoutSel.disabled=false;}};
-  var bookingButton=el('button',{class:'secondary',text:'+ Booking',onclick:()=>programmingUI.bookingModal(null,{scope:'screen',target:s.id})});bookingButton.disabled=!data.programmingAvailable;
+  var bookingButton=el('button',{class:'secondary',text:'Add content',onclick:()=>programmingUI.schedule(null,{scope:'screen',target:s.id})});bookingButton.disabled=!data.programmingAvailable;
   tr.append(el('td',{},[check]),el('td',{},[el('strong',{text:s.name}),el('small',{text:s.id.slice(0,12)})]),el('td',{text:s.zone}),el('td',{text:s.orientation}),el('td',{},[layoutSel]),el('td',{},[el('span',{class:'status '+(state==='Online'?'online':''),text:state})]),el('td',{text:s.last_seen?new Date(s.last_seen).toLocaleString():'Never'}),el('td',{},[el('button',{class:'secondary',text:'Preview',onclick:()=>previewScreen(s)}),bookingButton,el('button',{class:'secondary',text:'Edit',onclick:()=>editScreen(s)})]));
   body.append(tr);
  });updateFleetSelection();updateScreenPreview();
@@ -88,8 +88,8 @@ $('screen-bulk').onclick=()=>{
  });
 };
 var modalSave=()=>{},modalGeneration=0,modalCancel=null;
-function openModal(title,content,onSave,onCancel){modalGeneration++;modalCancel=onCancel||null;$('modal-save').disabled=false;$('modal-title').textContent=title;clear($('modal-content'));$('modal-content').append(content);modalSave=onSave;$('modal').classList.remove('hidden');return modalGeneration;}
-function closeModal(reason){var cancel=modalCancel;modalCancel=null;modalGeneration++;$('modal-save').disabled=false;$('modal').classList.add('hidden');if(reason!==false&&cancel)cancel();}
+function openModal(title,content,onSave,onCancel){$('modal-save').textContent='Save';$('modal-content').parentElement.classList.remove('guide-card');modalGeneration++;modalCancel=onCancel||null;$('modal-save').disabled=false;$('modal-title').textContent=title;clear($('modal-content'));$('modal-content').append(content);modalSave=onSave;$('modal').classList.remove('hidden');return modalGeneration;}
+function closeModal(reason){$('modal-content').parentElement.classList.remove('guide-card');var cancel=modalCancel;modalCancel=null;modalGeneration++;$('modal-save').disabled=false;$('modal').classList.add('hidden');if(reason!==false&&cancel)cancel();}
 $('modal-close').onclick=closeModal;$('modal-cancel').onclick=closeModal;
 $('modal-save').onclick=async()=>{
  if($('modal-save').disabled)return;
@@ -106,12 +106,12 @@ function freshLayout(){return {id:null,name:'New layout',orientation:'landscape'
 function bookingDesignState(){
  $('booking-design-banner').classList.toggle('hidden',!bookingDesign);$('layout-select').disabled=!!bookingDesign;$('new-layout').disabled=!!bookingDesign;
  $('schedule-layout').classList.toggle('hidden',!!bookingDesign);
- $('save-layout').textContent=bookingDesign?'Save design & return →':'Save layout →';
+ $('save-layout').textContent=bookingDesign?'Save design & continue →':'Save layout →';
  if(bookingDesign)$('booking-design-name').textContent=bookingDesign.draft.name||'New booking';
 }
-function beginBookingDesign(draft,source,copy){
+function beginBookingDesign(draft,source,copy,resume){
  if(bookingDesign){notify('Finish or cancel the current booking design first.',true);return;}
- bookingDesign={draft:JSON.parse(JSON.stringify(draft)),previousEditing:editing,previousSelected:selected,previousView:view};
+ bookingDesign={resume,draft:JSON.parse(JSON.stringify(draft)),previousEditing:editing,previousSelected:selected,previousView:view};
  editing=source?JSON.parse(JSON.stringify(source)):freshLayout();
  if(!source||copy){editing.id=null;delete editing.version;editing.name=(source?source.name+' copy':(draft.name||'Booking')+' design').slice(0,90);}
  selected=null;closeModal(false);bookingDesignState();show('layouts');renderLayoutOptions();renderEditor();
@@ -120,7 +120,7 @@ function finishBookingDesign(id){
  if(!bookingDesign)return;var design=bookingDesign;bookingDesign=null;
  editing=design.previousEditing;selected=design.previousSelected;bookingDesignState();renderLayoutOptions();if(editing)renderEditor();show(design.previousView);
  if(id){design.draft.item_type='layout';design.draft.item_id=id;}
- programmingUI.bookingModal(design.draft);
+ if(design.resume)design.resume(id);else programmingUI.bookingModal(design.draft);
 }
 $('booking-design-cancel').onclick=()=>finishBookingDesign();
 function renderLayoutOptions(){var select=$('layout-select'),id=editing&&editing.id;clear(select);select.append(option('','Select layout'));data.layouts.forEach(l=>select.append(option(l.id,l.name)));select.value=id||'';if(!editing){editing=data.layouts.length?JSON.parse(JSON.stringify(data.layouts[0])):freshLayout();renderEditor();select.value=editing.id||'';}}
@@ -135,7 +135,7 @@ async function saveLayout(schedule){
  if(new TextEncoder().encode(JSON.stringify(payload)).byteLength>1024*1024)return notify('Layout exceeds 1 MiB. Reduce embedded code or media.',true);
  if(payload.widgets.some(w=>w.type==='html'&&new TextEncoder().encode(w.html||'').byteLength>512*1024))return notify('An HTML widget exceeds 512 KiB.',true);
  $('save-layout').disabled=true;$('schedule-layout').disabled=true;
- try{var r=await api('/api/admin/layouts','POST',payload);saving.id=r.id;saving.version=r.version;notify(design?'Design saved. Save the booking to schedule it.':'Layout saved, version '+r.version);await refresh();if(design&&bookingDesign===design&&modalGeneration===dialogGeneration)finishBookingDesign(r.id);else if(schedule&&editing===saving&&modalGeneration===dialogGeneration){programmingUI.bookingModal(null,{scope:'screen',item_type:'layout',item_id:r.id,name:saving.name});}}
+ try{var r=await api('/api/admin/layouts','POST',payload);saving.id=r.id;saving.version=r.version;notify(design?'Design saved. Continue to choose when it plays.':'Layout saved, version '+r.version);await refresh();if(design&&bookingDesign===design&&modalGeneration===dialogGeneration)finishBookingDesign(r.id);else if(schedule&&editing===saving&&modalGeneration===dialogGeneration){programmingUI.schedule(null,{scope:'screen',item_type:'layout',item_id:r.id,name:saving.name});}}
  catch(e){notify(e.message,true);}finally{$('save-layout').disabled=false;$('schedule-layout').disabled=false;}
 }
 $('save-layout').onclick=()=>saveLayout(false);$('schedule-layout').onclick=()=>saveLayout(true);
@@ -148,8 +148,8 @@ function renderInspector(){var c=$('inspector');clear(c);var w=editing.widgets.f
  function field(lbl,key,type='text'){var i=inp(w[key]===undefined?'':w[key],lbl,type);i.oninput=()=>{w[key]=type==='number'?Number(i.value):i.value;renderCanvas();renderLayers();};c.append(labeled(lbl,i));return i;}
  c.append(el('strong',{text:w.type.toUpperCase()+' · LAYER'}));
  if(w.type==='channel'){
-  var channel=selectOptions(data.channels,w.channel_id,'Choose channel');channel.onchange=()=>{w.channel_id=channel.value;renderLayers();renderCanvas();renderInspector();};c.append(labeled('Channel in this area',channel));
-  c.append(el('p',{class:'muted',text:'Move and resize this area. Add or edit its playlist here. Saving a booking updates this shared channel wherever it is used.'}));var playlist=el('div',{class:'inspector-playlist'});programmingUI.renderChannelPlan(playlist,w.channel_id);c.append(playlist,el('button',{class:'secondary',text:'+ Channel booking',onclick:()=>programmingUI.bookingModal(null,{scope:'channel',target:w.channel_id})}));
+  var channel=selectOptions(data.channels,w.channel_id,'Choose channel');channel.onchange=()=>{w.channel_id=channel.value;renderLayers();renderCanvas();renderInspector();};c.append(labeled('Playlist in this area',channel));
+  c.append(el('p',{class:'muted',text:'Move and resize this area. Add or edit the items that take turns here. Changes affect every screen using this playlist.'}));var playlist=el('div',{class:'inspector-playlist'});programmingUI.renderChannelPlan(playlist,w.channel_id);c.append(playlist,el('button',{class:'secondary',text:'Add content to playlist',onclick:()=>programmingUI.schedule(null,{scope:'channel',target:w.channel_id})}));
  }else if(data.programmingAvailable)c.append(el('button',{class:'secondary',text:'Save as reusable content',onclick:()=>programmingUI.contentModal(null,w)}));
  if(w.type==='html'){
   var code=el('textarea',{'aria-label':'HTML / CSS / JavaScript code',rows:'12',spellcheck:'false'});code.value=w.html||'';

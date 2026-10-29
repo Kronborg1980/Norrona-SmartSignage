@@ -90,13 +90,21 @@ This is planned content, not a remote screenshot: an offline or disabled screen 
 
 ## Channels, content and bookings
 
-Start in **Plan & play**: choose a screen, a zone, all screens or an optional reusable channel. The destination keeps its bookings together, with **+ Add to plan**, editing and preview in the same workspace. A screen also shows its default layout and inherited zone/fleet bookings. The booking form follows **Where → What → When**, with a summary explaining what saving will make available to players. All schedule times remain UTC.
+The app opens on **Screen content**. Choose a screen, click **Add content**, then follow the short guide:
 
-Use **Design new content** inside a booking for the full Studio, or **+ Media / widget** for a single item. Saving or cancelling returns to the same booking with its settings preserved. If you start in Studio instead, **Save & schedule** saves the current design and opens a booking with it already selected. **Save layout** still updates every existing use of that shared layout. Reusable Content cards also have a direct **Schedule** action.
+1. Choose saved content, upload an image/MP4, write a message, or create a design.
+2. Choose **Every day, all day**, or select UTC days, dates and times.
+3. Read the summary and click **Add to screen**. Use **Preview screen** to check planned playback.
 
-Channels are optional playlists within a layout area; they are not required for fullscreen scheduling. In Studio, selecting a Channel layer shows its bookings in Inspector so they can be edited in place. Adding the first Channel layer opens channel creation and returns to the current unsaved design. A channel in Plan & play shows which layouts use it directly; it must still be placed in a layout assigned or scheduled on a screen to play there. **Channels**, **Content**, **Bookings** and **Layout rules** remain available for library management and existing schedules.
+No booking name, content type, priority, channel or playlist order is required for this everyday workflow. New items take the next position in the destination's rotation. Advanced priority, order, naming and pause controls are under **More options**. Existing values are preserved when editing. The final action makes the item available to players; offline screens may continue showing earlier content.
 
-If prompted, enable planning once through **Plan & play → Enable channels and bookings**. This authenticated setup preserves existing layouts and schedules; migration `0003_channels_bookings.sql` is the normal installation alternative. No new migration is required for the planning workspace.
+**Playlists** are the friendly name for the existing channels: a reusable list of items that take turns. Create a playlist, add content with the same guide, then choose **Use on a screen**. The guide automatically creates a fullscreen design containing the playlist, so there is no manual Studio step. For an individual screen, the design follows its portrait/landscape orientation. Group/fleet playlist designs use landscape; use Studio for custom shapes or mixed-format compositions. Shared playlist edits affect every screen using it.
+
+The main menu has Screen content, Playlists, Design Studio, Images & videos, and Manage screens. **More tools** retains the fleet overview, saved widgets, advanced booking editor and older layout rules. These continue to use the original APIs and schema. The detailed editor is also available under **More editing tools** in the guide for saved content/designs.
+
+**Save & schedule** in Studio opens the guide with the current design selected. Designing from the guide preserves the destination, timing and previous unsaved Studio work, and returns to the same guide. Uploads and quick messages are saved only on final confirmation. A design explicitly saved in Studio remains in the design library even if its later scheduling is cancelled. A failed booking save can be retried without repeating a successful file upload/content creation.
+
+If prompted, enable planning once through **Enable channels and bookings**. This authenticated setup preserves existing layouts and schedules; migration `0003_channels_bookings.sql` is the normal installation alternative. This UI update needs no migration or player change.
 
 Channels can play complete multi-layer templates, including other channels when there is no circular reference. Nested designs preserve their aspect ratio and local coordinates inside the channel area. The highest active priority plays; equal-priority bookings rotate by order and duration. Direct screen bookings temporarily override the original layout schedules/default, then return to them. Uploaded channel assets are integrity-checked before activation and can rotate offline. Refresh the player before assigning channels; older players preserve their previous content and reject manifests requiring the new capability. Preview uses the same timed resolver. See [the booking/channel model](docs/BOOKING_CHANNEL_MODEL.md) for exact date/tie rules, setup and compatibility limits.
 

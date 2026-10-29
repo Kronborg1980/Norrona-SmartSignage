@@ -37,7 +37,7 @@ test('editing a schedule retains a target zone with no current displays',async({
  let saved;
  const schedule={id:'schedule-1',name:'Reception schedule',scope:'zone',target:'Old Reception',layout_id:layout.id,start_time:'08:00',end_time:'22:00',days:[0,1,2,3,4,5,6],priority:0,enabled:true};
  await openAdmin(page,{screens:[{id:'a'.repeat(24),name:'Screen',zone:'Restaurant',orientation:'landscape',enabled:1}],schedules:[schedule],saveSchedule:async(route,payload)=>{saved=payload;return route.fulfill({json:{id:schedule.id}});}});
- await page.locator('#nav [data-view=schedules]').click();await page.locator('#schedule-list').getByRole('button',{name:'Edit',exact:true}).click();
+ await page.locator('#nav-advanced > summary').click();await page.locator('#nav [data-view=schedules]').click();await page.locator('#schedule-list').getByRole('button',{name:'Edit',exact:true}).click();
  await expect(page.getByRole('combobox',{name:'Target',exact:true})).toHaveValue(schedule.target);
  await expect(page.getByLabel('Priority (higher overrides lower)',{exact:true})).toHaveValue('0');
  await page.getByLabel('Name',{exact:true}).fill('Renamed schedule');await page.locator('#modal-save').click();
@@ -50,7 +50,7 @@ test('a completed save cannot close a different modal opened while it was pendin
  const gate=new Promise(resolve=>{release=resolve;}),start=new Promise(resolve=>{started=resolve;});
  const schedule={id:'schedule-1',name:'Existing schedule',scope:'all',target:'*',layout_id:layout.id,start_time:'08:00',end_time:'22:00',days:[0,1,2,3,4,5,6],priority:10,enabled:true};
  await openAdmin(page,{schedules:[schedule],onOverview:()=>overviews++,saveSchedule:async(route)=>{started();await gate;return route.fulfill({json:{id:schedule.id}});}});
- await page.locator('#nav [data-view=schedules]').click();await page.locator('#schedule-list').getByRole('button',{name:'Edit',exact:true}).click();
+ await page.locator('#nav-advanced > summary').click();await page.locator('#nav [data-view=schedules]').click();await page.locator('#schedule-list').getByRole('button',{name:'Edit',exact:true}).click();
  await page.locator('#modal-save').click();await start;await expect(page.locator('#modal-save')).toBeDisabled();
  await page.locator('#modal-cancel').click();await page.locator('#new-schedule').click();
  await page.getByLabel('Name',{exact:true}).fill('Unsaved new schedule');await expect(page.locator('#modal-save')).toBeEnabled();

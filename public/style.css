@@ -23,3 +23,32 @@
 #nav .nav-label{margin-top:18px}
 @media(max-width:700px){.planning-destination{display:grid;grid-template-columns:1fr}.planning-destination label{min-width:0}.booking-step .row-fields{grid-template-columns:1fr}}
 .booking-step{border-color:#293b50}.inspector-playlist .schedule-card{display:block;padding:12px;margin-bottom:10px}.inspector-playlist .card-actions{margin-top:10px}.inspector-playlist h3{font-size:13px}.inspector-playlist p{overflow-wrap:anywhere}
+/* Everyday tasks use a short guide; detailed management stays under More tools. */
+#nav-advanced{margin-top:20px;border-top:1px solid #293b50;padding-top:14px}
+#nav-advanced>summary{cursor:pointer;color:#9baec3;font-size:12px;padding:10px}
+#nav-advanced[open]{display:grid;gap:6px}
+.destination-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:20px 0}
+.destination-cards button{min-height:70px;text-align:left;overflow-wrap:anywhere}
+.guide-card{width:min(660px,96vw)}
+.guide-progress{list-style:none;display:flex;gap:12px;margin:0 0 22px;padding:0;color:#8fa5bc}
+.guide-progress li{flex:1;padding:10px 5px;border-bottom:3px solid #293b50;font-size:13px}
+.guide-progress .current{color:#8bd0fb;border-color:#55b5f0;font-weight:800}
+.guide-destination{padding:12px;background:#162b3e;border-radius:8px;overflow-wrap:anywhere}
+.guide-choices{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0}
+.guide-choices button{min-height:62px;white-space:normal}
+.guide-choices button[aria-pressed=true]{border-color:#55b5f0;background:#183e59;color:#eaf6ff}
+.scheduling-guide>button{margin:15px 10px 0 0}
+.scheduling-guide h3{font-size:23px;line-height:1.3;margin:18px 0}
+.scheduling-guide textarea{width:100%;resize:vertical}
+.scheduling-guide .muted{font-size:13px;line-height:1.6}
+.guide-advanced{border-top:1px solid #293b50;margin-top:20px;padding-top:16px}
+.guide-advanced summary{cursor:pointer;color:#a8bdcf;font-size:13px}
+.guide-review{margin-top:20px;padding:18px;border:1px solid #31516b;border-radius:10px;background:#10273a;overflow-wrap:anywhere}
+.guide-review p{line-height:1.5}.guide-review small{color:#a8bdcf;line-height:1.6}
+@media(max-width:850px){#nav-advanced>summary{font-size:10px;padding:4px}#nav-advanced{margin-top:8px}.destination-cards{grid-template-columns:1fr}}
+@media(max-width:540px){.guide-progress{gap:5px}.guide-progress li{font-size:11px}.guide-choices{grid-template-columns:1fr}.guide-card{padding:16px}.scheduling-guide h3{font-size:20px}}
+.guide-card{display:flex;flex-direction:column;overflow:hidden}
+.guide-card .modal-top,.guide-card .modal-actions{flex-shrink:0}
+.guide-card #modal-content{min-height:0;overflow-y:auto;padding-right:5px}
+.guide-card .modal-actions{padding-top:16px;border-top:1px solid #293b50;margin-top:16px}
+.guide-days{border:0;padding:0;margin:16px 0;color:#a8bdcf;font-size:12px}
