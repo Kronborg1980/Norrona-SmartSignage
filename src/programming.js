@@ -20,17 +20,71 @@ export async function checkChannelReferences(env,widgets) {
 }
 export async function checkVideoCapacity(env,changes={}) {
  if(!await programmingReady(env))return;
- const [types,bookRows,layoutRows]=await Promise.all([
+ const [types,bookRows,layoutRows,channelRows]=await Promise.all([
   env.DB.prepare("SELECT id,json_extract(widget_json,'$.type') AS type FROM content").all(),
   env.DB.prepare("SELECT id,scope,target,item_type,item_id,enabled FROM bookings WHERE scope='channel'").all(),
-  env.DB.prepare("SELECT id,name,widgets_json FROM layouts WHERE EXISTS (SELECT 1 FROM json_each(layouts.widgets_json) w WHERE json_extract(w.value,'$.type')='channel')").all()
+  env.DB.prepare('SELECT id,name,widgets_json FROM layouts').all(),
+  env.DB.prepare('SELECT id,name FROM channels').all()
  ]);
- const videos=new Set(types.results.filter(c=>c.type==='video').map(c=>c.id));
- if(changes.content){videos.delete(changes.content.id);if(changes.content.widget.type==='video')videos.add(changes.content.id);}
+ const content=new Map(types.results.map(c=>[c.id,c]));
+ if(changes.content)content.set(changes.content.id,{id:changes.content.id,type:changes.content.widget.type});
  const bookings=bookRows.results.filter(b=>b.id!==changes.booking?.id);if(changes.booking)bookings.push(changes.booking);
- const videoChannels=new Set(bookings.filter(b=>b.enabled&&b.scope==='channel'&&b.item_type==='content'&&videos.has(b.item_id)).map(b=>b.target));
  const layouts=layoutRows.results.filter(l=>l.id!==changes.layout?.id).map(l=>({...l,widgets:JSON.parse(l.widgets_json)}));if(changes.layout)layouts.push(changes.layout);
- for(const layout of layouts)if(layout.widgets.filter(w=>w.type==='video'||w.type==='channel'&&videoChannels.has(w.channel_id)).length>1)fail('Layout "'+layout.name+'" would have multiple video areas. Keep one possible video area per layout for the current Tizen player.');
+ validateProgrammingGraph(layouts,channelRows.results,bookings,content);
+}
+// Validate even disabled/future edges before a write, so later enabling a
+// booking cannot introduce recursion. Video alternatives use enabled bookings.
+function validateProgrammingGraph(layoutRows,channelRows,bookings,content,status=400) {
+ const layouts=new Map(layoutRows.map(l=>[l.id,l])),channels=new Map(channelRows.map(c=>[c.id,c]));
+ const edges=new Map(),channelBookings=new Map(channelRows.map(c=>[c.id,[]]));
+ for(const layout of layoutRows){
+  const next=[];for(const widget of layout.widgets){
+   if(widget.type!=='channel')continue;
+   if(!channels.has(widget.channel_id))fail('Referenced channel is unavailable',status);
+   next.push('channel:'+widget.channel_id);
+  }edges.set('layout:'+layout.id,next);
+ }
+ for(const channel of channelRows)edges.set('channel:'+channel.id,[]);
+ for(const booking of bookings){
+  if(booking.item_type==='content'){
+   if(!content.has(booking.item_id))fail('Booked content is unavailable',status);
+  }else if(booking.item_type==='layout'){
+   if(!layouts.has(booking.item_id))fail('Booked layout is unavailable',status);
+  }else fail('Invalid booked item type',status);
+  if(booking.scope!=='channel')continue;
+  if(!channels.has(booking.target))fail('Referenced channel is unavailable',status);
+  channelBookings.get(booking.target).push(booking);
+  if(booking.item_type==='layout')edges.get('channel:'+booking.target).push('layout:'+booking.item_id);
+ }
+ // Iterative DFS avoids imposing a fixed nesting-depth limit or overflowing
+ // the JS call stack on a valid, deeply nested acyclic composition.
+ const colors=new Map(),order=[];
+ for(const node of edges.keys()){
+  if(colors.has(node))continue;
+  const stack=[{node,index:0}];colors.set(node,1);
+  while(stack.length){
+   const frame=stack[stack.length-1],next=edges.get(frame.node);
+   if(frame.index<next.length){
+    const child=next[frame.index++];
+    if(colors.get(child)===1)fail('Channel/layout cycle detected. A channel cannot play a layout that leads back to itself.',status);
+    if(!colors.has(child)){colors.set(child,1);stack.push({node:child,index:0});}
+   }else{colors.set(frame.node,2);order.push(frame.node);stack.pop();}
+  }
+ }
+ const videos=new Map();
+ for(const node of order){
+  let count=0;
+  if(node.startsWith('channel:')){
+   for(const booking of channelBookings.get(node.slice(8))){
+    if(!booking.enabled)continue;
+    count=Math.max(count,booking.item_type==='layout'?videos.get('layout:'+booking.item_id):content.get(booking.item_id).type==='video'?1:0);
+   }
+  }else{
+   const layout=layouts.get(node.slice(7));
+   for(const widget of layout.widgets)count+=widget.type==='video'?1:widget.type==='channel'?videos.get('channel:'+widget.channel_id):0;
+   if(count>1)fail('Layout "'+layout.name+'" would have multiple video areas. Keep one possible video area per layout for the current Tizen player.',status);
+  }videos.set(node,count);
+ }
 }
 export async function programmingRoute(req,env,url,{body,response,rand,validateWidgets}) {
  const path=url.pathname,method=req.method;
@@ -74,7 +128,7 @@ export async function programmingRoute(req,env,url,{body,response,rand,validateW
  if(!target||target.length>90)fail('Choose a booking target');
  if(j.scope==='channel'&&!await env.DB.prepare('SELECT id FROM channels WHERE id=?').bind(target).first())fail('Channel not found');
  if(j.scope==='screen'&&!await env.DB.prepare('SELECT id FROM screens WHERE id=?').bind(target).first())fail('Screen not found');
- if(!['layout','content'].includes(j.item_type)||j.scope==='channel'&&j.item_type!=='content')fail('Channels accept content bookings; screens also accept whole layouts');
+ if(!['layout','content'].includes(j.item_type))fail('Choose content or a whole layout');
  if(!validId(j.item_id)||!await env.DB.prepare('SELECT id FROM '+(j.item_type==='layout'?'layouts':'content')+' WHERE id=?').bind(j.item_id).first())fail('Booked content or layout not found');
  const date=x=>x==null||x===''?null:typeof x==='string'&&/^\d{4}-\d\d-\d\d$/.test(x)&&Number.isFinite(Date.parse(x))&&new Date(x).toISOString().slice(0,10)===x?x:fail('Dates must be valid YYYY-MM-DD values');
  const start=date(j.start_date),end=date(j.end_date);if(start&&end&&start>end)fail('End date must follow start date');
@@ -95,15 +149,35 @@ export async function screenBookings(env,screen) {
  return (await env.DB.prepare("SELECT * FROM bookings WHERE enabled=1 AND (scope='all' OR (scope='screen' AND target=?) OR (scope='zone' AND target=?)) ORDER BY id").bind(screen.id,screen.zone).all()).results.map(mapBooking);
 }
 export async function manifestProgramming(env,layouts,directBookings) {
- const ids=[...new Set(layouts.flatMap(l=>l.widgets.filter(w=>w.type==='channel').map(w=>w.channel_id)))];
- if(!ids.length&&!directBookings.length)return null;
+ const initialChannels=[...new Set(layouts.flatMap(l=>l.widgets.filter(w=>w.type==='channel').map(w=>w.channel_id)))];
+ if(!initialChannels.length&&!directBookings.length)return null;
  await requireProgramming(env);
- const channels=(await env.DB.prepare('SELECT * FROM channels WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id').bind(JSON.stringify(ids)).all()).results;
- if(channels.length!==ids.length)fail('Referenced channel is unavailable',503);
- const channelBookings=(await env.DB.prepare("SELECT * FROM bookings WHERE enabled=1 AND scope='channel' AND target IN (SELECT value FROM json_each(?)) ORDER BY id").bind(JSON.stringify(ids)).all()).results.map(mapBooking);
- const bookings=[...directBookings,...channelBookings].sort((a,b)=>a.id.localeCompare(b.id));
+ const layoutMap=new Map(layouts.map(l=>[l.id,l])),channelMap=new Map(),bookingMap=new Map(directBookings.map(b=>[b.id,b]));
+ let pendingChannels=initialChannels,pendingLayouts=[];
+ while(pendingChannels.length||pendingLayouts.length){
+  if(pendingLayouts.length){
+   const ids=[...new Set(pendingLayouts)].filter(id=>!layoutMap.has(id));pendingLayouts=[];
+   if(ids.length){
+    const rows=(await env.DB.prepare('SELECT * FROM layouts WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id').bind(JSON.stringify(ids)).all()).results;
+    if(rows.length!==ids.length)fail('Booked layout is unavailable',503);
+    for(const row of rows){const layout={...row,widgets:JSON.parse(row.widgets_json),widgets_json:undefined};layoutMap.set(row.id,layout);for(const widget of layout.widgets)if(widget.type==='channel'&&!channelMap.has(widget.channel_id))pendingChannels.push(widget.channel_id);}
+   }
+  }
+  const ids=[...new Set(pendingChannels)].filter(id=>!channelMap.has(id));pendingChannels=[];
+  if(!ids.length)continue;
+  const rows=(await env.DB.prepare('SELECT * FROM channels WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id').bind(JSON.stringify(ids)).all()).results;
+  if(rows.length!==ids.length)fail('Referenced channel is unavailable',503);
+  for(const row of rows)channelMap.set(row.id,row);
+  const next=(await env.DB.prepare("SELECT * FROM bookings WHERE enabled=1 AND scope='channel' AND target IN (SELECT value FROM json_each(?)) ORDER BY id").bind(JSON.stringify(ids)).all()).results.map(mapBooking);
+  for(const booking of next){bookingMap.set(booking.id,booking);if(booking.item_type==='layout'&&!layoutMap.has(booking.item_id))pendingLayouts.push(booking.item_id);}
+ }
+ const bookings=[...bookingMap.values()].sort((a,b)=>a.id.localeCompare(b.id));
  const contentIds=[...new Set(bookings.filter(b=>b.item_type==='content').map(b=>b.item_id))];
  const content=(await env.DB.prepare('SELECT * FROM content WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id').bind(JSON.stringify(contentIds)).all()).results.map(mapContent);
  if(content.length!==contentIds.length)fail('Booked content is unavailable',503);
- return {channels,bookings,content};
+ const channels=[...channelMap.values()].sort((a,b)=>a.id.localeCompare(b.id)),allLayouts=[...layoutMap.values()].sort((a,b)=>a.id.localeCompare(b.id));
+ // Check the read graph too: a broken/cyclic database must never replace the
+ // player's previous verified manifest, including after concurrent admin edits.
+ validateProgrammingGraph(allLayouts,channels,bookings,new Map(content.map(c=>[c.id,{type:c.widget.type}])),503);
+ return {channels,bookings,content,layouts:allLayouts,...(bookings.some(b=>b.scope==='channel'&&b.item_type==='layout')?{channel_layouts:1}:{})};
 }

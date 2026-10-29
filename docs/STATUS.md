@@ -2,7 +2,7 @@
 
 ## Latest bug review
 
-**54 Node tests and 26 Chromium tests pass**, including 100 concurrent channel players in local Wrangler D1/R2, the existing 100-player fleet waves, weather request coalescing and corrupt/incomplete-manifest rejection. Syntax and whitespace checks pass. The prior Worker deployment dry-run passed; this update changes browser assets only. The prior dependency audit reported **0 known vulnerabilities** in the installed lockfile.
+**67 Node tests and 32 Chromium tests pass**, including 100 concurrent channel players in local Wrangler D1/R2, the existing 100-player fleet waves, weather request coalescing and corrupt/incomplete-manifest rejection. Syntax and whitespace checks pass. The Worker deployment dry-run passed for the booking-authoring update. The prior dependency audit reported **0 known vulnerabilities** in the installed lockfile.
 
 The review fixed concurrency errors in pairing/login, editor data corruption, offline integrity/state recovery, portrait geometry, schedule-target changes, SQL parameter limits and smaller API/tooling defects. See [the detailed review](REVIEW_2026-10-28.md), which also records unresolved fetch-timeout, cache-cleanup, pairing-persistence and screen-rotation issues. These remain limitations; the system is not certified for shipboard production.
 
@@ -86,3 +86,11 @@ Weather validation also covers host-wide 429 backoff, numeric/date Retry-After v
 Normal player playback, backoffice Preview and the editor canvas no longer cover content with network, HTTP 429, cached-weather or disabled-network diagnostic banners. An explicit `debug=1` query parameter enables those overlays; `debug=10` or a `?debug=1` string embedded inside another parameter does not. Editor Inspector guidance remains available. Network-enabled HTML widgets still use the same isolated renderer, local libraries and shared weather cache/retry transport. Normal-mode widget monitoring does not post diagnostic messages or read diagnostic response headers. The user-provided HTML is not rewritten to hide its own authored elements.
 
 Two additional Chromium regressions cover clean disabled-network playback and normal-mode 429/stale responses without losing shared weather transport. Existing debug-mode tests still verify failure/recovery messages, source checks, isolation and independent weather diagnostics. Use `/player.html` without `?debug=1` for normal display links. The shell cache version is updated to refresh browser assets.
+
+## Booking authoring · 29 October 2026
+
+The booking form now creates media/widgets directly and opens the actual Layout Studio for new multi-layer designs, template copies or editing shared designs. Every existing Studio tool is available. Saving/cancelling returns to the booking with scheduling fields intact and restores the previous unsaved Studio layout. Nested modal saves and delayed design saves cannot overwrite a newer booking dialog. Channel preview/editor preview now include the complete template set.
+
+Channel bookings accept layouts with an acyclic nested channel graph. Backend and player validation reject cycles/missing references, recursively enforce the current video-area constraint, and include future nested media before atomic activation. New channel-layouts-v1 capability negotiation preserves older players' cached content until they are updated. No new database migration is required.
+
+13 additional Node tests cover reference closure, deep validation, large widgets, graph/video rules, cached-state protection and 100 concurrent nested clients. Six additional browser tests cover all eight Studio layer types from a booking, direct widget creation, cancellation/copy semantics, delayed-save races, scaling/portrait/clipping, static iframe/video preservation and verified nested offline media. Live Cloudflare deployment/quotas and physical Tizen playback are not verified by these local checks.

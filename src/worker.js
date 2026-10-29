@@ -115,9 +115,9 @@ async function adminRoute(req,env,url) {
  if(path==='/api/admin/layouts'&&method==='POST') {
   const j=await body(req);let widgets;
   try{widgets=validateWidgets(j.widgets||[],j.orientation);}catch(e){return error(e.message);}
-  await checkChannelReferences(env,widgets);
-  await checkVideoCapacity(env,{layout:{id:j.id,name:name(j.name)||'Untitled layout',widgets}});
   const id=j.id||rand(12);if(!/^[a-zA-Z0-9_-]{3,50}$/.test(id))return error('Invalid layout id');
+  await checkChannelReferences(env,widgets);
+  await checkVideoCapacity(env,{layout:{id,name:name(j.name)||'Untitled layout',widgets}});
   if(new TextEncoder().encode(JSON.stringify(widgets)).byteLength>MAX_LAYOUT_BYTES)return error('Layout widget data exceeds 1 MiB',413);
   const existing=await env.DB.prepare('SELECT version FROM layouts WHERE id=?').bind(id).first();
   const stamp=now();
@@ -217,10 +217,13 @@ async function playerRoute(req,env,url) {
   const relevantIds=new Set([screen.layout_id,...schedules.map(s=>s.layout_id),...directBookings.filter(b=>b.item_type==='layout').map(b=>b.item_id)].filter(Boolean));
   const ids=[...relevantIds];
   const layoutRows=ids.length?(await env.DB.prepare('SELECT * FROM layouts WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id').bind(JSON.stringify(ids)).all()).results:[];
-  const layouts=layoutRows.map(mapLayout);
+  let layouts=layoutRows.map(mapLayout);
   if(layouts.length!==ids.length)return error('Referenced layout is unavailable',503);
   const programming=await manifestProgramming(env,layouts,directBookings);
-  if(programming&&!String(req.headers.get('X-Player-Capabilities')||'').split(',').includes('channels-v1'))return error('Update the player before using channels and bookings',409);
+  const capabilities=String(req.headers.get('X-Player-Capabilities')||'').split(',').map(x=>x.trim());
+  if(programming&&!capabilities.includes('channels-v1'))return error('Update the player before using channels and bookings',409);
+  if(programming?.channel_layouts&&!capabilities.includes('channel-layouts-v1'))return error('Update the player before using layered channel bookings',409);
+  if(programming?.layouts)layouts=programming.layouts;
   const refs=new Set();
   for(const w of [...layouts.flatMap(l=>l.widgets),...(programming?.content||[]).map(c=>c.widget)]){
    if(typeof w.src==='string'&&w.src.startsWith('/media/')){

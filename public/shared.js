@@ -66,6 +66,11 @@
     for (var i = 0; i < items.length; i++) if (items[i].id === id) return items[i];
     return null;
   }
+  function findLayout(manifest, id) {
+    var layouts = manifest.layouts || [];
+    for (var i = 0; i < layouts.length; i++) if (layouts[i].id === id) return layouts[i];
+    return null;
+  }
   function pickBooking(manifest, scope, target, at) {
     var screen = manifest.screen || {}, instant = new Date(at).getTime();
     var pool = (manifest.bookings || []).filter(function(b) {
@@ -85,12 +90,61 @@
   function resolveWidgets(layout, manifest, at) {
     return (layout.widgets || []).map(function(area) {
       if (area.type !== 'channel') return {key:area.id,widget:area};
-      var b = pickBooking(manifest,'channel',area.channel_id,at), item = b && findContent(manifest,b.item_id);
+      var b = pickBooking(manifest,'channel',area.channel_id,at);
+      if (b && b.item_type === 'layout') {
+        var booked = findLayout(manifest,b.item_id);
+        if (booked) return {key:area.id + ':' + b.id + ':layout:' + booked.id + ':' + booked.version,widget:Object.assign({},area,{type:'composition'}),layout:booked};
+      }
+      var item = b && b.item_type === 'content' && findContent(manifest,b.item_id);
       if (!item) return {key:area.id + ':empty',widget:Object.assign({},area,{type:'empty'})};
       var w = Object.assign({}, item.widget, {id:area.id,x:area.x,y:area.y,w:area.w,h:area.h,z:area.z,radius:area.radius || 0,opacity:(area.opacity == null ? 1 : area.opacity) * (item.widget.opacity == null ? 1 : item.widget.opacity)});
       if (w.background === 'transparent' || !w.background) w.background = area.background || 'transparent';
       return {key:area.id + ':' + b.id + ':' + item.version,widget:w};
     });
+  }
+  // Validate the complete layout/channel graph before activating or restoring a
+  // manifest. Kahn's algorithm avoids recursive validation and arbitrary depth
+  // caps; duplicated edges still contribute to their owner's degree.
+  function programmingReferencesValid(manifest) {
+    if (!manifest || !Array.isArray(manifest.bookings)) return false;
+    if (manifest.channel_layouts !== undefined && manifest.channel_layouts !== 1) return false;
+    var graph = Object.create(null), degree = Object.create(null), layouts = Object.create(null), channels = Object.create(null), content = Object.create(null);
+    var valid = true, hasChannelLayout = false;
+    function index(items,map,prefix) {
+      if (!Array.isArray(items)) { valid = false; return; }
+      items.forEach(function(item) {
+        if (!item || typeof item.id !== 'string' || Object.prototype.hasOwnProperty.call(map,item.id)) { valid = false; return; }
+        map[item.id] = item;
+        if (prefix) { graph[prefix + item.id] = []; degree[prefix + item.id] = 0; }
+      });
+    }
+    index(manifest.layouts,layouts,'layout:');index(manifest.channels,channels,'channel:');index(manifest.content,content,'');
+    if (!valid) return false;
+    function edge(from,to) { graph[from].push(to); degree[to]++; }
+    Object.keys(layouts).forEach(function(id) {
+      var layout = layouts[id];
+      if (!Array.isArray(layout.widgets)) { valid = false; return; }
+      layout.widgets.forEach(function(w) {
+        if (!w || w.type !== 'channel') return;
+        if (!Object.prototype.hasOwnProperty.call(channels,w.channel_id)) valid = false;
+        else edge('layout:' + id,'channel:' + w.channel_id);
+      });
+    });
+    (manifest.bookings || []).forEach(function(b) {
+      if (!b) { valid = false; return; }
+      var items = b.item_type === 'layout' ? layouts : b.item_type === 'content' ? content : null;
+      if (!items || !Object.prototype.hasOwnProperty.call(items,b.item_id)) { valid = false; return; }
+      if (b.scope === 'channel') {
+        if (!Object.prototype.hasOwnProperty.call(channels,b.target)) { valid = false; return; }
+        if (b.item_type === 'layout') { hasChannelLayout = true; edge('channel:' + b.target,'layout:' + b.item_id); }
+      }
+    });
+    if (!valid || hasChannelLayout && manifest.channel_layouts !== 1) return false;
+    var queue = Object.keys(graph).filter(function(key) { return degree[key] === 0; }), seen = 0;
+    for (var i = 0; i < queue.length; i++) {
+      seen++;graph[queue[i]].forEach(function(next) { degree[next]--; if (degree[next] === 0) queue.push(next); });
+    }
+    return seen === Object.keys(graph).length;
   }
   function normalizeWidget(w, orientation) {
     w = w || {};
@@ -257,7 +311,7 @@
     });
   }
   var core = { activeSchedule: activeSchedule, resolveLayout: resolveLayout, normalizeWidget: normalizeWidget,
-    bookingWindow: bookingWindow, pickBooking: pickBooking, resolveWidgets: resolveWidgets,
+    bookingWindow: bookingWindow, pickBooking: pickBooking, resolveWidgets: resolveWidgets, programmingReferencesValid: programmingReferencesValid,
     fonts: fonts, widgetStyle: widgetStyle, webWidget: webWidget, widgetNetworkHint: widgetNetworkHint, debugEnabled: debugEnabled, screenStatus: screenStatus, filterScreens: filterScreens };
   root.SmartSignageCore = core;
   if (typeof module !== 'undefined' && module.exports) module.exports = core;

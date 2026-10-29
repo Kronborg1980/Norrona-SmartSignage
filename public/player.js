@@ -21,12 +21,14 @@ function manifestValid(o){
  const widgetOK=w=>w&&typeof w.type==='string'&&(!/^\/media\//.test(w.src||'')||o.assets.some(a=>a.url===w.src));
  if(!o.layouts.every(l=>l&&typeof l.id==='string'&&Array.isArray(l.widgets)&&l.widgets.every(widgetOK)))return false;
  if(o.programming!==undefined&&o.programming!==1)return false;
+ if(o.channel_layouts!==undefined&&(o.channel_layouts!==1||o.programming!==1))return false;
  if(o.programming===1){
   if(!Array.isArray(o.channels)||!Array.isArray(o.content)||!Array.isArray(o.bookings))return false;
   if(!o.channels.every(c=>c&&typeof c.id==='string')||!o.content.every(c=>c&&typeof c.id==='string'&&widgetOK(c.widget)&&c.widget.type!=='channel'))return false;
   if(!o.bookings.every(b=>b&&typeof b.id==='string'&&Number.isInteger(b.duration)&&b.duration>0&&Array.isArray(b.days)&&['screen','zone','all','channel'].includes(b.scope)&&
-    (b.scope!=='channel'||b.item_type==='content'&&o.channels.some(c=>c.id===b.target))&&
+    (b.scope!=='channel'||o.channels.some(c=>c.id===b.target))&&
     (b.item_type==='content'?o.content.some(c=>c.id===b.item_id):b.item_type==='layout'&&o.layouts.some(l=>l.id===b.item_id))))return false;
+  if(!core.programmingReferencesValid(o))return false;
  }
  return o.layouts.every(l=>l.widgets.every(w=>w.type!=='channel'||o.programming===1&&o.channels.some(c=>c.id===w.channel_id)));
 }
@@ -75,18 +77,40 @@ async function activate(manifest,etag){
 function getDimensions(l){return l&&l.orientation==='portrait'?[1080,1920]:[1920,1080];}
 function resize(){if(!active)return;var l=core.resolveLayout(active,new Date()),dim=getDimensions(l),w=dim[0],h=dim[1];var sx=innerWidth/w,sy=innerHeight/h;var stage=$('stage');stage.style.width=w+'px';stage.style.height=h+'px';var s=Math.min(sx,sy);stage.style.left=((innerWidth-w*s)/2)+'px';stage.style.top=((innerHeight-h*s)/2)+'px';stage.style.transform='scale('+s+')';}
 function render(){if(!active){show('pair-screen');return;}
- var layout=core.resolveLayout(active,new Date());$('debug-name').textContent=active.screen.name||'';
+ var at=new Date(),layout=core.resolveLayout(active,at);$('debug-name').textContent=active.screen.name||'';
  if(!layout){show('empty-state');$('empty-name').textContent=active.screen.name;layoutId='';clearStage();return;}
  show('');if(layout.id!==layoutId){clearStage();layoutId=layout.id;}var stage=$('stage');stage.style.background=layout.background||'#071220';
- var desired=Object.create(null);
- core.resolveWidgets(layout,active,new Date()).sort((a,b)=>a.widget.z-b.widget.z).forEach(function(entry,index){
-  var slot=String(index);desired[slot]=true;
-  if(renderedWidgets[slot]&&renderedWidgets[slot].key===entry.key)return;
+ // A work queue preserves each composition's local coordinate space without
+ // recursive JavaScript rendering or restarting unaffected iframe/video nodes.
+ var jobs=[{parent:stage,layout,records:renderedWidgets,lineage:[layout.id]}];
+ for(var jobIndex=0;jobIndex<jobs.length;jobIndex++)renderEntries(jobs[jobIndex],at,jobs);
+ resize();appVisible=true;
+}
+function renderEntries(job,at,jobs){
+ var desired=Object.create(null),orientation=job.layout.orientation;
+ core.resolveWidgets(job.layout,active,at).sort((a,b)=>a.widget.z-b.widget.z).forEach(function(inputEntry,index){
+  var entry=inputEntry,slot=String(index);desired[slot]=true;
+  // Preview data is intentionally read-only and may bypass manifest activation.
+  // Do not recurse if an invalid preview contains a layout/channel cycle.
+  if(entry.layout&&job.lineage.indexOf(entry.layout.id)>=0)entry={key:entry.key+':cycle',widget:Object.assign({},entry.widget,{type:'empty'})};
+  var previous=job.records[slot];
+  if(previous&&previous.key===entry.key){
+   if(entry.layout)jobs.push({parent:previous.stage,layout:entry.layout,records:previous.children,lineage:job.lineage.concat(entry.layout.id)});
+   return;
+  }
   var input=entry.widget;
-  var w=core.normalizeWidget(input,layout.orientation),elem=create('div','widget');
+  var w=core.normalizeWidget(input,orientation),elem=create('div','widget');
+  elem.setAttribute('data-widget-id',w.id);
   Object.assign(elem.style,{left:w.x+'px',top:w.y+'px',width:w.w+'px',height:w.h+'px',zIndex:String(w.z),color:w.color,background:w.background,borderRadius:w.radius+'px',fontSize:w.fontSize+'px',textAlign:w.align});
   Object.assign(elem.style,core.widgetStyle(w));
-  if(w.type==='html'||w.type==='webpage'){elem.append(core.webWidget(w,{diagnostics:debugMode}));var warning=core.widgetNetworkHint(w);if(debugMode&&warning)elem.append(create('div','widget-network-hint',warning));
+  var record={key:entry.key,elem};
+  if(entry.layout){
+   elem.setAttribute('data-booked-layout',entry.layout.id);
+   var dim=getDimensions(entry.layout),scale=Math.min(w.w/dim[0],w.h/dim[1]),composition=create('div','composition-stage');
+   Object.assign(composition.style,{position:'absolute',left:((w.w-dim[0]*scale)/2)+'px',top:((w.h-dim[1]*scale)/2)+'px',width:dim[0]+'px',height:dim[1]+'px',transformOrigin:'0 0',transform:'scale('+scale+')',background:entry.layout.background||'#071220',overflow:'hidden'});
+   elem.append(composition);record.stage=composition;record.children=Object.create(null);
+   jobs.push({parent:composition,layout:entry.layout,records:record.children,lineage:job.lineage.concat(entry.layout.id)});
+  }else if(w.type==='html'||w.type==='webpage'){elem.append(core.webWidget(w,{diagnostics:debugMode}));var warning=core.widgetNetworkHint(w);if(debugMode&&warning)elem.append(create('div','widget-network-hint',warning));
   }else if(w.type==='text'){
    var t=create('div','text',w.text);t.style.lineHeight='inherit';t.style.alignItems=w.verticalAlign==='top'?'flex-start':w.verticalAlign==='bottom'?'flex-end':'center';t.style.justifyContent=w.align==='center'?'center':w.align==='right'?'flex-end':'flex-start';elem.append(t);
   }else if(w.type==='clock'){
@@ -98,17 +122,25 @@ function render(){if(!active){show('pair-screen');return;}
    var url=assets[w.src]||(w.src&&w.src.charAt(0)==='/'?endpoint(w.src):w.src);if(!url)return;var m=create(w.type==='image'?'img':'video');m.src=url;m.style.objectFit=w.fit;m.style.width='100%';m.style.height='100%';
    if(w.type==='video'){m.autoplay=true;m.muted=true;m.loop=true;m.playsInline=true;m.setAttribute('playsinline','');m.addEventListener('error',()=>state('Video playback error'));m.play().catch(()=>state('Video autoplay blocked'));}
    elem.append(m);
-  }stage.append(elem);
-  if(renderedWidgets[slot])removeWidget(renderedWidgets[slot].elem);
-  renderedWidgets[slot]={key:entry.key,elem:elem};
- });Object.keys(renderedWidgets).forEach(slot=>{if(!desired[slot]){removeWidget(renderedWidgets[slot].elem);delete renderedWidgets[slot];}});resize();appVisible=true;
+  }job.parent.append(elem);
+  if(previous)removeRecord(previous,job.parent);
+  job.records[slot]=record;
+ });Object.keys(job.records).forEach(slot=>{if(!desired[slot]){removeRecord(job.records[slot],job.parent);delete job.records[slot];}});
 }
-function removeWidget(elem){if(elem._clock){clearInterval(elem._clock);window._clocks=(window._clocks||[]).filter(x=>x!==elem._clock);}elem.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});$('stage').removeChild(elem);}
+function removeRecord(record,parent){
+ var pending=[{record,parent,visited:false}];
+ while(pending.length){
+  var current=pending.pop(),item=current.record,elem=item.elem;
+  if(!current.visited&&item.children){pending.push({record:item,parent:current.parent,visited:true});Object.keys(item.children).forEach(key=>pending.push({record:item.children[key],parent:item.stage,visited:false}));continue;}
+  if(elem._clock){clearInterval(elem._clock);window._clocks=(window._clocks||[]).filter(x=>x!==elem._clock);}
+  elem.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});current.parent.removeChild(elem);
+ }
+}
 function clearStage(){(window._clocks||[]).forEach(clearInterval);window._clocks=[];renderedWidgets=Object.create(null);var stage=$('stage');stage.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});while(stage.firstChild)stage.removeChild(stage.firstChild);}
 async function pairingStart(){try{show('pair-screen');var r=await fetch(endpoint('/api/player/pair/start'),{method:'POST'});if(!r.ok)throw Error('Pairing service unavailable');var j=await r.json();pairCode=j.code;$('pair-code').textContent=pairCode;$('pair-status').textContent='Waiting for administrator approval';$('try-again').classList.add('hidden');clearInterval(pairTimer);pairTimer=setInterval(pairingPoll,4000);}catch(e){state('Pairing unavailable');$('pair-status').textContent=e.message;$('try-again').classList.remove('hidden');}}
 async function pairingPoll(){if(!pairCode||busy)return;busy=true;try{var r=await fetch(endpoint('/api/player/pair/status?code='+encodeURIComponent(pairCode)),{cache:'no-store'});if(r.status===410){clearInterval(pairTimer);$('pair-status').textContent='Code expired';$('try-again').classList.remove('hidden');return;}if(!r.ok)throw Error('Pair status failed');var j=await r.json();if(j.paired){credentials={id:j.screen_id,token:j.token};store(credKey,credentials);pairCode='';clearInterval(pairTimer);state('Paired');show('empty-state');setTimeout(sync,0);}}catch(e){state('Waiting for connection');}finally{busy=false;}}
 $('try-again').onclick=pairingStart;
-async function sync(){if(!validCred(credentials)||busy)return;busy=true;lastSync=Date.now();try{var h={'X-Player-ID':credentials.id,'X-Player-Token':credentials.token,'X-Player-Capabilities':'channels-v1'};if(lastEtag)h['If-None-Match']=lastEtag;var r=await fetch(endpoint('/api/player/sync'),{method:'POST',headers:h,cache:'no-store'});
+async function sync(){if(!validCred(credentials)||busy)return;busy=true;lastSync=Date.now();try{var h={'X-Player-ID':credentials.id,'X-Player-Token':credentials.token,'X-Player-Capabilities':'channels-v1,channel-layouts-v1'};if(lastEtag)h['If-None-Match']=lastEtag;var r=await fetch(endpoint('/api/player/sync'),{method:'POST',headers:h,cache:'no-store'});
  if(r.status===401){state('Device revoked — re-pair required');return;}
  if(r.status===304){state('Online · up to date');return;}
  if(!r.ok)throw Error('Sync HTTP '+r.status);var j=await r.json();await activate(j,r.headers.get('ETag')||'');
