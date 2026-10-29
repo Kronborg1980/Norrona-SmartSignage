@@ -13,3 +13,13 @@
 .card-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.booking-filter{display:flex;align-items:center;gap:12px;margin-bottom:20px;color:#a8bdcf;font-size:13px}.booking-days{display:flex;flex-wrap:wrap;gap:10px}.booking-days label{margin:0}.content-fields textarea{display:block;width:100%;resize:vertical}.content-fields textarea[spellcheck=false]{font-family:monospace;min-height:240px}.programming-setup button{margin-top:12px}.channel-label{position:absolute;left:0;top:0;max-width:100%;padding:8px 14px;background:#153f61ef;color:#d9f3ff;font:24px Arial,sans-serif;z-index:1;pointer-events:none}.canvas-widget:has(.channel-label){border-color:#387da2}
 
 .booking-authoring{margin:18px 0;padding:16px;border:1px solid #31516b;border-radius:10px;background:#10273a}.booking-authoring p,.booking-authoring small{display:block;color:#a8bdcf;font-size:12px;line-height:1.6}.booking-authoring .card-actions{justify-content:flex-start;margin:12px 0}.booking-authoring .card-actions button{flex:1 1 180px}#booking-design-banner p{margin:8px 0 12px}
+/* Destination-first planning shares the existing booking and player model. */
+.planning-destination{display:flex;align-items:end;gap:18px;padding:20px;margin-bottom:24px;flex-wrap:wrap}
+.planning-destination label{flex:1;min-width:180px}
+.planning-destination select{width:100%;margin-top:8px}
+#plan-detail>.hint{margin:16px 0}#plan-detail>h3{margin:24px 0 12px}
+.booking-step{border-top:1px solid var(--border,#dce3ed);padding-top:16px;margin-top:18px}
+.booking-step h3{margin:0 0 12px}.booking-summary{margin-top:20px}
+#nav .nav-label{margin-top:18px}
+@media(max-width:700px){.planning-destination{display:grid;grid-template-columns:1fr}.planning-destination label{min-width:0}.booking-step .row-fields{grid-template-columns:1fr}}
+.booking-step{border-color:#293b50}.inspector-playlist .schedule-card{display:block;padding:12px;margin-bottom:10px}.inspector-playlist .card-actions{margin-top:10px}.inspector-playlist h3{font-size:13px}.inspector-playlist p{overflow-wrap:anywhere}

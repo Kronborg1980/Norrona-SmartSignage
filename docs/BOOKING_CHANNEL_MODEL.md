@@ -9,7 +9,7 @@ Confirmed by the user: a direct screen booking may schedule **either a whole lay
 - Channel bookings select media/widgets or full multi-layer designs within the channel's layout area.
 - Bookable content includes images, videos, text and reusable widgets. Multi-file widget packages require their own media-library source-file management.
 
-Implemented in this update: **Channels**, **Content** and **Bookings** are separate main-menu sections; Layout Studio can place a channel in a positioned/resizable area. The same channel and reusable content may appear in multiple layouts. Existing inline layout widgets, default assignments and the original layout schedules remain supported.
+The primary **Plan & play** workspace groups bookings by destination. **Channels**, **Content** and **Bookings** remain available as library/overview sections; Layout Studio can place a channel in a positioned/resizable area. The same channel and reusable content may appear in multiple layouts. Existing inline layout widgets, default assignments and the original layout schedules remain supported.
 
 ## Setup
 
@@ -19,11 +19,12 @@ If activation has not happened, the new sections display the activation action, 
 
 ## Workflow
 
-1. **Channels → New channel** creates a named reusable stream.
-2. **Content → New content** creates text, image, video, clock, ticker, HTML/CSS/JavaScript or hosted HTTPS content. Images/videos can use uploaded R2 media or HTTPS links. Typography and sandbox/network settings are preserved. An existing inline layer can be copied using **Save as reusable content**.
-3. **Channels → + Booking** schedules content into that channel. Use **+ Media / widget** to create a single item directly in the booking, or **Design new content** for the complete Layout Studio. **Design from template** creates an independent copy; **Edit selected design** updates the shared design. Saving or cancelling the designer returns to the booking with its dates, times, weekdays, duration, order, priority, target and enabled state preserved. **Bookings** lists and edits channel, screen, zone and fleet bookings.
-4. **Layout Studio → Channel** places the chosen channel in an area. Position, width, height, opacity and layer order belong to the area. Content styling belongs to reusable content. The editor shows a current snapshot; channel/screen **Preview** uses the actual timed player.
-5. Assign the layout using Screens. Alternatively, **Screens → + Booking** schedules either a whole layout or individual content fullscreen on that display.
+1. Open **Plan & play** and choose a screen, zone, all screens or a reusable channel. Direct fullscreen playback does not require a channel. Pair screens and assign their zones through **Screens**.
+2. Choose **+ Add to plan**. The selected destination is retained. The form groups **Where**, **What** and **When**, followed by a live summary. Choose existing content, **+ Media / widget**, **Design new content**, or **Design from template**. New designs and copied templates return to the same booking with all scheduling fields intact; editing a shared design changes all its uses.
+3. Save the booking, then preview the destination. Screen plans also show the default layout and inherited zone/all-screen bookings. Existing layout rules remain visible through a shortcut and still apply when no direct booking is active. Paused/future bookings remain listed with their settings; the list is a plan, not a claim that all entries play now.
+4. To begin with a design, use **Layout Studio → Save & schedule**. This saves through the normal layout validation path and preselects it in a booking. Saving a design alone does not create a new booking. **Content → Schedule** similarly preselects reusable content.
+5. For a reusable rotating area, choose **Reusable channel** in Plan & play and create a channel there. Add bookings in the same workspace. In Studio add a **Channel** layer; the first channel can be created without leaving the unsaved layout. The layer Inspector lists its bookings for editing in place. Position/size belongs to the area; scheduling and content belong to the shared channel. Place the channel in an assigned/scheduled layout before expecting screen playback. Plan & play lists direct layout references, not a complete recursive deployment map.
+6. **Bookings** remains the fleet-wide booking overview. **Layout rules** retains the original layout schedules. No data migration or player/API behavior change is needed for the unified workspace.
 
 An empty channel area is transparent except for its configured background. Deletion of referenced content, channels or layouts is rejected with instructions to remove their bookings/areas first. Channels may book complete layouts, including layouts containing other channels. Cyclic references are rejected, including disabled/future booking links and edits to previously booked layouts. Valid acyclic nesting has no arbitrary depth limit.
 
