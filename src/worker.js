@@ -99,7 +99,7 @@ async function adminRoute(req,env,url) {
   await env.DB.prepare('UPDATE screens SET device_token_hash=?,last_seen=NULL,updated_at=? WHERE id=?').bind('revoked-'+rand(),now(),j.id).run(); return response({ok:true});
  }
  if(path==='/api/admin/pair/claim'&&method==='POST') {
-  const j=await body(req);const code=String(j.code||'').toUpperCase();
+  const j=await body(req);const code=String(j.code||'').toUpperCase().replace(/[\s-]/g,'');
   const pairing=await env.DB.prepare('SELECT * FROM pairings WHERE code=? AND expires_at>?').bind(code,now()).first();
   if(!pairing||pairing.claimed_screen_id)return error('Invalid or expired pairing code',404);
   const id=rand(12),token=rand(32), stamp=now();

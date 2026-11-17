@@ -1,5 +1,11 @@
 # Implementation status · 28 October 2026
 
+## Simple screen setup · 17 November 2026
+
+Adding a screen and putting something on it now takes a few taps. The player's pairing screen shows the 12-character code in groups of four and a QR code (bundled MIT `qrcode-generator` 2.0.4, cached offline and copied to the Tizen bundle). Scanning it opens the backoffice at `/?pair=CODE`; after login the "Add a screen" sheet has the code filled in, so the user only picks a name (quick chips) and Landscape/Portrait. Typed codes accept spaces, dashes and lowercase (normalised in the browser and the Worker). Screen content opens on large screen cards with an "Add a screen" card and Screens/Groups/All screens/Playlists chips; after pairing from there, the new screen opens directly. The content guide offers "Show it now, all the time" so the timing step can be skipped. Default layout moved under Screen settings. No migration; pairing security and token handling are unchanged.
+
+`npm test`: 67 passed. `npm run test:browser`: 47 passed, including `tests/browser/simple-screen-setup.spec.js` (QR deep link, code formatting, end-to-end message on the player). Two older browser tests (`planning-workflow.spec.js:40`, `simple-scheduling.spec.js:24`) have shown timing-dependent failures on GitHub runners; they pass locally and are unrelated to these changes.
+
 ## Mobile-friendly backoffice · 17 November 2026
 
 The backoffice is now usable on phones. Below 850 px the sidebar becomes a fixed bottom tab bar (Content, Playlists, Design, Media, Screens, More) with clear icons; More holds the advanced tools and Sign out. Dialogs open as full-width bottom sheets with Save/Cancel always in reach, form fields use 16 px text (no iOS zoom) and 46 px touch targets. Display fleet rows become cards below 700 px. Screen content shows a three-step "how it works" strip, destination cards with zone and online status, and an "← All screens" link. Desktop keeps the existing sidebar; all element IDs, APIs and player code are unchanged and no migration is required.

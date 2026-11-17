@@ -25,9 +25,11 @@ function clear(parent){parent.replaceChildren();}
 function notify(s,bad){var n=$('notice');n.textContent=s;n.classList.remove('hidden');n.classList.toggle('bad',!!bad);setTimeout(()=>n.classList.add('hidden'),5000);}
 async function api(url,method='GET',body){var opts={method,headers:{Authorization:'Bearer '+token}};if(body!==undefined){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(body);}var r=await fetch(url,opts);var j=await r.json().catch(()=>({error:'Network response was not JSON'}));if(!r.ok){if(r.status===401)logout();throw Error(j.error||'HTTP '+r.status);}return j;}
 function logout(){closePreview();fleetSelection.clear();sessionStorage.removeItem('signage-admin-token');token='';$('app').classList.add('hidden');$('login').classList.remove('hidden');}
-function enter(){ $('login').classList.add('hidden');$('app').classList.remove('hidden');refresh();}
+var pendingPair=(new URLSearchParams(location.search).get('pair')||'').toUpperCase().replace(/[^0-9A-F]/g,'').slice(0,12);
+if(pendingPair){var pairHint=document.getElementById('login-pair-hint');if(pairHint)pairHint.classList.remove('hidden');}
+function enter(){ $('login').classList.add('hidden');$('app').classList.remove('hidden');refresh().then(()=>{if(!pendingPair)return;var c=pendingPair;pendingPair='';try{history.replaceState(null,'',location.pathname);}catch(e){}show('plan');addScreen(c,true);});}
 $('login-form').onsubmit=async e=>{e.preventDefault();$('login-error').textContent='';try{var r=await fetch('/api/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('password').value})});var j=await r.json();if(!r.ok)throw Error(j.error||'Access denied');token=j.token;sessionStorage.setItem('signage-admin-token',token);$('password').value='';enter();}catch(err){$('login-error').textContent=err.message;}};
-var programmingUI=window.createProgrammingUI({data,el,option,labeled,inp,api,core,openModal,modalCurrent:generation=>generation===modalGeneration,notify,refresh,uploadFile,designBooking:beginBookingDesign,currentView:()=>view,previewScreen,editScreen,show,preview:previewManifest,channelsChanged:()=>{if(view==='layouts'&&editing){renderCanvas();renderLayers();if(editing.widgets.some(w=>w.id===selected&&w.type==='channel'))renderInspector();}}});
+var programmingUI=window.createProgrammingUI({addScreen:(code,openAfter)=>addScreen(code,openAfter),data,el,option,labeled,inp,api,core,openModal,modalCurrent:generation=>generation===modalGeneration,notify,refresh,uploadFile,designBooking:beginBookingDesign,currentView:()=>view,previewScreen,editScreen,show,preview:previewManifest,channelsChanged:()=>{if(view==='layouts'&&editing){renderCanvas();renderLayers();if(editing.widgets.some(w=>w.id===selected&&w.type==='channel'))renderInspector();}}});
 $('logout').onclick=logout;$('logout-menu').onclick=logout;if(token)enter();
 async function refresh(){try{var results=await Promise.all([api('/api/admin/overview'),api('/api/admin/screens'),api('/api/admin/layouts'),api('/api/admin/schedules'),api('/api/admin/media'),api('/api/admin/programming')]);data.screens=results[1].items;data.layouts=results[2].items;data.schedules=results[3].items;data.media=results[4].items;data.programmingAvailable=results[5].available===true;data.channels=results[5].channels||[];data.content=results[5].content||[];data.bookings=results[5].bookings||[];$('stat-screens').textContent=results[0].screens;$('stat-online').textContent=results[0].online;$('stat-layouts').textContent=results[0].layouts;$('stat-schedules').textContent=results[0].schedules;$('screen-pill').textContent=data.screens.length;renderScreens();renderLayoutOptions();renderSchedules();renderMedia();programmingUI.render();}catch(e){notify(e.message,true);}}
 var titles={plan:['SCREEN CONTENT','Screen content'],overview:['OVERVIEW','Fleet overview'],screens:['DISPLAYS','Display fleet'],layouts:['STUDIO','Layout Studio'],channels:['PLAYLISTS','Shared playlists'],bookings:['BOOKINGS','Content bookings'],content:['CONTENT','Reusable content'],schedules:['SCHEDULING','Content scheduling'],media:['LIBRARY','Media Library']};
@@ -100,7 +102,42 @@ $('modal-save').onclick=async()=>{
 };
 function labeled(label,control){if(['INPUT','SELECT','TEXTAREA'].includes(control.tagName))control.setAttribute('aria-label',label);return el('label',{},[document.createTextNode(label),control]);}
 function inp(v,placeholder,type='text'){return el('input',{type,value:v==null?'':v,placeholder:placeholder||''});}
-$('pair-open').onclick=()=>{var code=inp('','12-character code from player'),n=inp('','e.g. Reception — Port'),zone=inp('Reception','e.g. Reception'),orient=el('select',{},[option('landscape','Landscape'),option('portrait','Portrait')]);openModal('Pair a Samsung display',el('div',{},[el('p',{text:'Open /player.html on the display or a test browser and enter its pairing code.'}),labeled('Pairing code',code),labeled('Screen name',n),labeled('Zone / group',zone),labeled('Orientation',orient)]),async()=>{await api('/api/admin/pair/claim','POST',{code:code.value.trim(),name:n.value,zone:zone.value,orientation:orient.value});notify('Display paired successfully');});};
+// One simple sheet: open the player on the TV, type or scan its code, name the screen.
+function addScreen(prefill,openAfter){
+ var cleanCode=v=>String(v||'').toUpperCase().replace(/[^0-9A-F]/g,'').slice(0,12);
+ var formatCode=v=>cleanCode(v).replace(/(.{4})(?=.)/g,'$1 ');
+ var playerUrl=location.origin+'/player';
+ var code=inp(formatCode(prefill),'A1B2 C3D4 E5F6');code.className='code-input';
+ ['autocomplete','off','autocapitalize','characters','spellcheck','false','inputmode','text'].forEach((v,i,a)=>{if(i%2===0)code.setAttribute(v,a[i+1]);});
+ code.oninput=()=>{var f=formatCode(code.value);if(f!==code.value)code.value=f;};
+ var name=inp('','e.g. Reception');name.maxLength=90;
+ var chips=el('div',{class:'name-chips'},['Reception','Restaurant','Café','Bar','Shop','Info desk'].map(n=>el('button',{type:'button',class:'chip',text:n,onclick:()=>{name.value=n;name.focus();}})));
+ var orientation='landscape',turn=el('div',{class:'orient-choices',role:'group','aria-label':'Screen direction'});
+ [['landscape','Landscape','Wide'],['portrait','Portrait','Tall']].forEach(([id,label,sub])=>{var b=el('button',{type:'button',class:'orient-choice orient-'+id},[el('span',{class:'orient-shape','aria-hidden':'true'}),el('strong',{text:label}),el('small',{text:sub})]);b.onclick=()=>{orientation=id;turn.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));};b.setAttribute('aria-pressed',String(id===orientation));turn.append(b);});
+ var zone=inp('','e.g. Deck 7');zone.maxLength=90;
+ var error=el('p',{class:'error hidden',role:'alert'});
+ var copy=el('button',{type:'button',class:'secondary',text:'Copy link',onclick:()=>{(navigator.clipboard?navigator.clipboard.writeText(playerUrl):Promise.reject()).then(()=>notify('Link copied')).catch(()=>notify(playerUrl));}});
+ var stepOne=el('div',{class:'setup-step'+(prefill?' done':'')},[el('span',{class:'setup-num',text:prefill?'✓':'1'}),el('div',{},[el('strong',{text:prefill?'Code received from the screen':'On the TV, open the player'}),prefill?el('p',{text:'Just give the screen a name below.'}):el('p',{},['Open ',el('b',{text:playerUrl}),' in the TV browser. A code and a QR code appear. Scanning the QR code with your phone fills in the code for you.']),prefill?el('span'):copy])]);
+ var body=el('div',{class:'add-screen'},[stepOne,
+  el('div',{class:'setup-step'},[el('span',{class:'setup-num',text:'2'}),el('div',{},[labeled('Pairing code',code),el('small',{class:'muted',text:'The 12 letters and numbers shown on the TV.'})])]),
+  el('div',{class:'setup-step'},[el('span',{class:'setup-num',text:'3'}),el('div',{},[labeled('Screen name',name),chips])]),
+  el('div',{class:'setup-step'},[el('span',{class:'setup-num',text:'4'}),el('div',{},[el('strong',{class:'setup-label',text:'Which way does the screen hang?'}),turn])]),
+  el('details',{class:'guide-advanced'},[el('summary',{text:'More options'}),labeled('Zone / group',zone),el('p',{class:'muted',text:'Optional. Screens in the same group, e.g. "Deck 7", can be updated together.'})]),
+  error]);
+ body.addEventListener('input',()=>error.classList.add('hidden'));
+ openModal('Add a screen',body,async()=>{
+  var c=cleanCode(code.value);
+  if(c.length!==12){error.textContent='Type the 12-character code shown on the TV.';error.classList.remove('hidden');code.focus();return false;}
+  if(!name.value.trim()){error.textContent='Give the screen a name, e.g. Reception.';error.classList.remove('hidden');name.focus();return false;}
+  var result=await api('/api/admin/pair/claim','POST',{code:c,name:name.value.trim(),zone:zone.value.trim(),orientation});
+  notify(name.value.trim()+' is connected ✓ Now choose what it shows.');
+  if(openAfter){await refresh();show('plan');programmingUI.selectDestination('screen',result.screen_id);}
+ });
+ $('modal-save').textContent='Add screen';
+ setTimeout(()=>(prefill?name:code).focus(),50);
+}
+$('pair-open').onclick=()=>addScreen(null,false);
+
 function editScreen(s){var n=inp(s.name),zone=inp(s.zone),orient=el('select',{},[option('landscape','Landscape'),option('portrait','Portrait')]);orient.value=s.orientation;var enabled=el('input',{type:'checkbox'});enabled.checked=!!s.enabled;var layout=selectOptions(data.layouts,s.layout_id,'No layout');var reset=el('button',{class:'secondary',text:'Revoke device token / require re-pair',onclick:async()=>{if(!confirm('This display will stop syncing until it is re-paired. Continue?'))return;await api('/api/admin/screens/reset','POST',{id:s.id});notify('Device token revoked');closeModal();refresh();}});openModal('Edit display',el('div',{},[labeled('Display name',n),labeled('Zone',zone),labeled('Orientation',orient),labeled('Default layout',layout),el('label',{class:'checkline'},[enabled,' Enabled']),reset]),async()=>{await api('/api/admin/screens','PATCH',{id:s.id,name:n.value,zone:zone.value,orientation:orient.value,layout_id:layout.value||null,enabled:enabled.checked});notify('Display updated');});}
 // Layout editor
 function freshLayout(){return {id:null,name:'New layout',orientation:'landscape',background:'#071220',widgets:[]};}
