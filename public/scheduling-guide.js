@@ -54,7 +54,7 @@ root.createSchedulingGuide=function(ctx){
    }else if(step===1){
     body.append(el('h3',{text:'What would you like to show?'}));
     const sources=el('div',{class:'guide-choices'});
-    [['saved','Choose saved content'],['upload','Upload image or video'],['message','Write a message']].forEach(([id,label])=>{const b=button(label,()=>{source=id;show();});b.setAttribute('aria-pressed',String(source===id));sources.append(b);});body.append(sources);
+    [['upload','Upload image or video'],['message','Write a message'],['saved','Choose saved content']].forEach(([id,label])=>{const b=button(label,()=>{source=id;show();});b.setAttribute('aria-pressed',String(source===id));sources.append(b);});body.append(sources);
     if(source==='saved'){
      const select=el('select',{'aria-label':'Saved content'});select.append(option('','Choose content, a design or a playlist'));
      [[data.content,'content','Saved items'],[data.layouts,'layout','Designs'],[data.channels.filter(c=>!(s.scope==='channel'&&s.target===c.id)),'channel','Playlists']].forEach(([items,kind,label])=>{if(!items.length)return;const group=el('optgroup',{label});items.forEach(c=>group.append(option(kind+':'+c.id,c.name)));select.append(group);});
@@ -66,6 +66,8 @@ root.createSchedulingGuide=function(ctx){
      const upload=el('input',{type:'file',accept:'image/jpeg,image/png,image/webp,image/gif,video/mp4'});
      upload.onchange=()=>{file=upload.files[0]||null;uploaded=null;created=null;createdKey='';show();};body.append(labeled('Choose image or video',upload),el('p',{class:'muted',text:file?'Selected: '+file.name:'JPG, PNG, WebP, GIF or MP4 · up to 25 MB. Your file is uploaded when you finish.'}));
     }
+    // Most people want it on screen now: skip the timing step with sensible defaults.
+    const now=button('Show it now, all the time ✓',()=>{if(busy||!validate())return;timing='always';step=2;document.getElementById('modal-save').click();},true);now.classList.add('guide-now');body.append(now);
     body.append(el('p',{class:'muted',text:'Need several layers, a clock or your own HTML?'}),button('Create a design',()=>{
      ctx.designBooking(Object.assign({},s,{name:s.name||'New content'}),null,true,id=>{if(id){source='saved';choice='layout:'+id;}show();});
     }));

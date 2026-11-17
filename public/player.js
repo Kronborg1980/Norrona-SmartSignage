@@ -137,7 +137,15 @@ function removeRecord(record,parent){
  }
 }
 function clearStage(){(window._clocks||[]).forEach(clearInterval);window._clocks=[];renderedWidgets=Object.create(null);var stage=$('stage');stage.querySelectorAll('video').forEach(v=>{v.pause();v.removeAttribute('src');v.load();});while(stage.firstChild)stage.removeChild(stage.firstChild);}
-async function pairingStart(){try{show('pair-screen');var r=await fetch(endpoint('/api/player/pair/start'),{method:'POST'});if(!r.ok)throw Error('Pairing service unavailable');var j=await r.json();pairCode=j.code;$('pair-code').textContent=pairCode;$('pair-status').textContent='Waiting for administrator approval';$('try-again').classList.add('hidden');clearInterval(pairTimer);pairTimer=setInterval(pairingPoll,4000);}catch(e){state('Pairing unavailable');$('pair-status').textContent=e.message;$('try-again').classList.remove('hidden');}}
+function showPairCode(code){
+ // Groups of four are easier to read from across a room; textContent stays the plain code.
+ var box=$('pair-code');while(box.firstChild)box.removeChild(box.firstChild);
+ for(var i=0;i<code.length;i+=4){var part=document.createElement('span');part.textContent=code.slice(i,i+4);box.appendChild(part);}
+ var qrBox=$('pair-qr');while(qrBox.firstChild)qrBox.removeChild(qrBox.firstChild);
+ try{if(typeof qrcode!=='function')throw Error('QR unavailable');var link=(server||location.origin)+'/?pair='+encodeURIComponent(code);var qr=qrcode(0,'M');qr.addData(link);qr.make();var img=document.createElement('img');img.alt='';img.src=qr.createDataURL(8,0);qrBox.appendChild(img);qrBox.classList.remove('hidden');}
+ catch(e){qrBox.classList.add('hidden');}
+}
+async function pairingStart(){try{show('pair-screen');var r=await fetch(endpoint('/api/player/pair/start'),{method:'POST'});if(!r.ok)throw Error('Pairing service unavailable');var j=await r.json();pairCode=j.code;showPairCode(pairCode);$('pair-status').textContent='Waiting for administrator approval';$('try-again').classList.add('hidden');clearInterval(pairTimer);pairTimer=setInterval(pairingPoll,4000);}catch(e){state('Pairing unavailable');$('pair-status').textContent=e.message;$('try-again').classList.remove('hidden');}}
 async function pairingPoll(){if(!pairCode||busy)return;busy=true;try{var r=await fetch(endpoint('/api/player/pair/status?code='+encodeURIComponent(pairCode)),{cache:'no-store'});if(r.status===410){clearInterval(pairTimer);$('pair-status').textContent='Code expired';$('try-again').classList.remove('hidden');return;}if(!r.ok)throw Error('Pair status failed');var j=await r.json();if(j.paired){credentials={id:j.screen_id,token:j.token};store(credKey,credentials);pairCode='';clearInterval(pairTimer);state('Paired');show('empty-state');setTimeout(sync,0);}}catch(e){state('Waiting for connection');}finally{busy=false;}}
 $('try-again').onclick=pairingStart;
 async function sync(){if(!validCred(credentials)||busy)return;busy=true;lastSync=Date.now();try{var h={'X-Player-ID':credentials.id,'X-Player-Token':credentials.token,'X-Player-Capabilities':'channels-v1,channel-layouts-v1'};if(lastEtag)h['If-None-Match']=lastEtag;var r=await fetch(endpoint('/api/player/sync'),{method:'POST',headers:h,cache:'no-store'});

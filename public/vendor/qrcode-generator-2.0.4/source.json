@@ -1,0 +1,6 @@
+{
+  "package": "qrcode-generator",
+  "version": "2.0.4",
+  "source": "https://www.npmjs.com/package/qrcode-generator/v/2.0.4",
+  "local_changes": "dist/qrcode.js copied unchanged; used only to draw the pairing QR code on the player."
+}

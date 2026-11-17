@@ -8,7 +8,7 @@ async function setup(page,request){
 test('one destination workspace creates a channel, designs content and retains the plan through editing',async({page,request})=>{
  const {post,token}=await setup(page,request);
  await page.goto('/');await page.locator('#nav [data-view=plan]').click();await page.locator('#plan-scope').selectOption('channel');
- await page.locator('#plan-new-channel').click();await page.getByLabel('Playlist name',{exact:true}).fill('Unified planning channel');await page.locator('#modal-save').click();await expect(page.locator('#modal')).toBeHidden();
+ await page.locator('#plan-detail .add-card',{hasText:'New playlist'}).click();await page.getByLabel('Playlist name',{exact:true}).fill('Unified planning channel');await page.locator('#modal-save').click();await expect(page.locator('#modal')).toBeHidden();
  await expect(page.locator('#plan-target option:checked')).toHaveText('Unified planning channel');
  await page.getByRole('button',{name:'Add content',exact:true}).click();await page.locator('#modal').getByText('More editing tools',{exact:true}).click();await page.getByRole('button',{name:'Advanced editor',exact:true}).click();await expect(page.getByLabel('Destination',{exact:true})).toHaveValue('channel');
  await page.getByLabel('Booking name',{exact:true}).fill('Unified welcome');await page.getByLabel('Duration (seconds)',{exact:true}).fill('25');await page.getByRole('button',{name:'Design new content',exact:true}).click();await page.locator('[data-add=text]').click();await page.getByLabel('Text',{exact:true}).fill('WELCOME FROM THE PLAN');await page.locator('#save-layout').click();

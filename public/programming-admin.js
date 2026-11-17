@@ -80,26 +80,39 @@ root.createProgrammingUI=function(ctx){
   clear(select);select.append(option('','Choose '+(scope==='channel'?'a playlist':'a destination')));targets.forEach(t=>select.append(option(t.id,t.name)));select.value=previous;if(select.selectedIndex<0)select.value='';
   select.disabled=!targets.length;$('plan-new-channel').classList.toggle('hidden',scope!=='channel');$('plan-new-channel').disabled=!data.programmingAvailable;
   var target=select.value,detail=$('plan-detail');clear(detail);$('view-plan').classList.toggle('has-target',!!target);
-  if(!targets.length){detail.append(el('div',{class:'empty'},[el('h3',{text:scope==='screen'?'Pair a screen to get started':scope==='channel'?'Create a reusable channel':'No zones yet'}),el('p',{text:scope==='screen'?'Pair a display in Screens, or choose All screens to prepare content before pairing.':scope==='channel'?'Channels rotate content inside a layout area. For fullscreen playback, choose a screen instead.':'Create zones by editing a screen in Screens.'}),button(scope==='channel'?'+ New channel':'Manage screens',()=>scope==='channel'?newPlanChannel():ctx.show('screens'))]));return;}
   if(!target){
-   var search=inp('','Find by name','search'),cards=el('div',{class:'destination-cards'});search.setAttribute('aria-label','Find a screen or playlist');
+   // Home: pick what kind of place, then tap one big card.
+   var kinds=el('div',{class:'scope-chips',role:'group','aria-label':'Show places'});
+   [['screen','Screens'],['zone','Groups'],['all','All screens'],['channel','Playlists']].forEach(([id,label])=>{var chip=el('button',{type:'button',class:'chip'+(scope===id?' active':''),text:label,onclick:()=>{$('plan-scope').value=id;select.value='';renderPlan();}});chip.setAttribute('aria-pressed',String(scope===id));kinds.append(chip);});
+   detail.append(kinds);
+   var cards=el('div',{class:'destination-cards'});
    function meta(t){
     if(scope==='screen'){var st=core.screenStatus(t,Date.now());return {text:t.zone+' · '+st,state:st==='Online'?'online':st==='Disabled'?'disabled':'offline'};}
     if(scope==='zone'){var n=data.screens.filter(x=>x.zone===t.id).length;return {text:n+' screen'+(n===1?'':'s'),state:''};}
     if(scope==='channel'){var n=data.bookings.filter(b=>b.scope==='channel'&&b.target===t.id).length;return {text:n+' item'+(n===1?'':'s'),state:''};}
-    return {text:data.screens.length+' screen'+(data.screens.length===1?'':'s'),state:''};
+    return {text:'Every screen · '+data.screens.length+' in total',state:''};
    }
-   function draw(){clear(cards);var found=targets.filter(t=>t.name.toLowerCase().includes(search.value.toLowerCase()));found.forEach(t=>{var m=meta(t);cards.append(el('button',{class:'secondary dest-card',onclick:()=>{select.value=t.id;renderPlan();}},[el('strong',{text:t.name}),el('small',{class:m.state?'dot '+m.state:'',text:m.text}),el('span',{class:'dest-go','aria-hidden':'true',text:'›'})]));});if(!found.length)cards.append(el('p',{text:'No matches. Try another name.'}));}search.oninput=draw;draw();
-   detail.append(el('h3',{text:'Choose '+(scope==='channel'?'a playlist':'where to play')}),search,cards);return;
+   var addCard=scope==='screen'?el('button',{class:'add-card',onclick:()=>ctx.addScreen(null,true)},[el('span',{class:'add-plus','aria-hidden':'true',text:'+'}),el('strong',{text:'Add a screen'}),el('small',{text:'Connect a new TV in under a minute'})]):scope==='channel'?el('button',{class:'add-card',onclick:newPlanChannel},[el('span',{class:'add-plus','aria-hidden':'true',text:'+'}),el('strong',{text:'New playlist'}),el('small',{text:'Several items that take turns'})]):null;
+   var search=null;
+   function draw(){clear(cards);var q=search?search.value.toLowerCase():'';var found=targets.filter(t=>t.name.toLowerCase().includes(q));found.forEach(t=>{var m=meta(t);cards.append(el('button',{class:'secondary dest-card',onclick:()=>{select.value=t.id;renderPlan();}},[el('strong',{text:t.name}),el('small',{class:m.state?'dot '+m.state:'',text:m.text}),el('span',{class:'dest-go','aria-hidden':'true',text:'›'})]));});if(targets.length&&!found.length)cards.append(el('p',{text:'No matches. Try another name.'}));if(addCard)cards.append(addCard);}
+   if(!targets.length){
+    detail.append(el('div',{class:'empty-start'},[el('h3',{text:scope==='screen'?'No screens yet':scope==='channel'?'No playlists yet':'No groups yet'}),el('p',{text:scope==='screen'?'Add your first screen. Turn on the TV, open the player and scan the code with your phone.':scope==='channel'?'A playlist shows several items in turn. Most people only need Screens.':'Groups appear when you give screens a zone, e.g. "Deck 7".'})]));
+    if(scope==='zone')detail.append(button('Go to screens',()=>{$('plan-scope').value='screen';renderPlan();}));
+   }else{
+    detail.append(el('h3',{class:'home-title',text:scope==='channel'?'Tap a playlist to change it':scope==='zone'?'Tap a group to change all its screens':scope==='all'?'Show something on every screen':'Tap a screen to choose what it shows'}));
+    if(targets.length>6){search=inp('','Find by name','search');search.setAttribute('aria-label','Find a screen or playlist');search.oninput=draw;detail.append(search);}
+   }
+   draw();detail.append(cards);return;
   }
   var destination=targets.find(t=>t.id===target),screen=scope==='screen'&&destination;
   var back=button('← '+(scope==='channel'?'All playlists':scope==='zone'?'All groups':'All screens'),()=>{select.value='';renderPlan();});back.className='back-link';if(scope!=='all')detail.append(back);
   var add=button('Add content',()=>schedule(null,{scope,target}));add.className='primary';add.disabled=!data.programmingAvailable;
   var actions=el('div',{class:'card-actions'},[add]);
-  if(screen){actions.append(button('Preview screen',()=>ctx.previewScreen(screen)),button('Change default layout',()=>ctx.editScreen(screen)));}
+  if(screen){actions.append(button('Preview screen',()=>ctx.previewScreen(screen)));}
   if(scope==='channel')actions.append(button('Preview playlist',()=>previewChannel(destination)),button('Use on a screen',()=>schedule(null,{item_type:'channel',item_id:target})));
-  detail.append(el('div',{class:'section-toolbar'},[el('div',{},[el('h3',{text:destination.name}),el('p',{text:scope==='channel'?'Items take turns in this playlist. Use it on a screen to start playback.':'Add the items you want this screen to show, then preview the result.'})]),actions]));
-  if(screen){var layout=data.layouts.find(l=>l.id===screen.layout_id);detail.append(el('div',{class:'hint'},[el('strong',{text:'Default: '+(layout?layout.name:'No layout assigned')}),el('p',{text:'Used when no booking or layout rule is active. Preview includes screen, zone and all-screen rules.'})]));}
+  var statusLine=screen?(function(){var st=core.screenStatus(screen,Date.now());return el('p',{class:'dot '+(st==='Online'?'online':st==='Disabled'?'disabled':'offline'),text:st+' · '+screen.zone+' · '+(screen.orientation==='portrait'?'Portrait':'Landscape')});})():null;
+  detail.append(el('div',{class:'section-toolbar'},[el('div',{},[el('h3',{text:destination.name})].concat(statusLine?[statusLine]:[]).concat([el('p',{text:scope==='channel'?'Items take turns in this playlist. Use it on a screen to start playback.':'Add the items you want this screen to show, then preview the result.'})])),actions]));
+  var screenSettings=null;if(screen){var layout=data.layouts.find(l=>l.id===screen.layout_id);screenSettings=el('details',{class:'guide-advanced screen-settings'},[el('summary',{text:'Screen settings'}),el('div',{class:'hint'},[el('strong',{text:'Default: '+(layout?layout.name:'No layout assigned')}),el('p',{text:'Shown when nothing else is planned. Preview includes screen, zone and all-screen rules.'})]),el('div',{class:'card-actions'},[button('Change default layout',()=>ctx.editScreen(screen))])]);}
   if(scope==='channel'){
    var used=data.layouts.filter(l=>(l.widgets||[]).some(w=>w.type==='channel'&&w.channel_id===target));
    detail.append(el('p',{class:'muted',text:used.length?'Placed directly in: '+used.map(l=>l.name).join(', '):'Not used in a design yet. Choose Use on a screen to show this playlist fullscreen.'}));
@@ -114,6 +127,7 @@ root.createProgrammingUI=function(ctx){
   }
   var legacy=data.schedules.filter(r=>r.scope==='all'||(r.scope===scope&&r.target===target)||(screen&&r.scope==='zone'&&r.target===screen.zone));
   if(scope!=='channel'&&legacy.length)detail.append(el('div',{class:'hint'},[el('strong',{text:legacy.length+' existing layout rule(s) also apply'}),el('p',{text:'Bookings take precedence while active. Review older rules before adding overlapping plans.'}),button('Review layout rules',()=>ctx.show('schedules'))]));
+  if(screenSettings)detail.append(screenSettings);
  }
  function planCard(b,inherited){
   var item=(b.item_type==='layout'?data.layouts:data.content).find(i=>i.id===b.item_id);
@@ -139,6 +153,7 @@ root.createProgrammingUI=function(ctx){
  $('new-channel').onclick=()=>channelModal();$('new-content').onclick=()=>contentModal();$('new-booking').onclick=()=>bookingModal();$('booking-filter').onchange=render;
  document.querySelectorAll('.programming-activate').forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api('/api/admin/programming/setup','POST',{});await ctx.refresh();ctx.notify('Channels, Content and Bookings enabled');}catch(e){ctx.notify(e.message,true);}finally{b.disabled=false;}});
  function renderChannelPlan(node,id){var bookings=data.bookings.filter(b=>b.scope==='channel'&&b.target===id);bookings.forEach(b=>node.append(planCard(b,false)));if(!bookings.length)node.append(el('p',{class:'muted',text:'This channel is empty. Add content below to start its playlist.'}));}
- return {render,renderPlan,renderChannelPlan,channelModal,bookingModal,schedule,contentModal,previewChannel};
+ function selectDestination(scope,target){$('plan-scope').value=scope;renderPlan();$('plan-target').value=target;renderPlan();}
+ return {selectDestination,render,renderPlan,renderChannelPlan,channelModal,bookingModal,schedule,contentModal,previewChannel};
 };
 })(window);
