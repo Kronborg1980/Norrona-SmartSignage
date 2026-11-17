@@ -14,7 +14,7 @@ test('phone layout uses a bottom tab bar, a More menu with sign out and card-sty
  await expect(page.locator('.quick-steps')).toBeHidden();
  await page.locator('#plan-detail .back-link').click();await expect(page.locator('#plan-target')).toHaveValue('');
  await page.locator('#nav [data-view=screens]').click();
- await expect(page.locator('#screens-body tr td[data-label=Zone]').first()).toHaveText('Deck 6');
+ await page.locator('#screen-search').fill('Phone nav screen');await expect(page.locator('#screens-body tr',{hasText:'Phone nav screen'}).locator('td[data-label=Zone]')).toHaveText('Deck 6');
  expect(await page.locator('#view-screens').evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);
  await page.locator('#nav-advanced > summary').click();await expect(page.locator('#logout-menu')).toBeVisible();
  await page.locator('#nav [data-view=overview]').click();await expect(page.locator('#view-overview')).toBeVisible();
