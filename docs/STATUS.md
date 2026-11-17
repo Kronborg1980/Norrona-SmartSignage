@@ -1,5 +1,11 @@
 # Implementation status · 28 October 2026
 
+## Mobile-friendly backoffice · 17 November 2026
+
+The backoffice is now usable on phones. Below 850 px the sidebar becomes a fixed bottom tab bar (Content, Playlists, Design, Media, Screens, More) with clear icons; More holds the advanced tools and Sign out. Dialogs open as full-width bottom sheets with Save/Cancel always in reach, form fields use 16 px text (no iOS zoom) and 46 px touch targets. Display fleet rows become cards below 700 px. Screen content shows a three-step "how it works" strip, destination cards with zone and online status, and an "← All screens" link. Desktop keeps the existing sidebar; all element IDs, APIs and player code are unchanged and no migration is required.
+
+`npm test`: 67 passed. `npm run test:browser`: 45 passed, including two new tests in `tests/browser/mobile-navigation.spec.js` (phone tab bar, More menu, card list, desktop unchanged).
+
 ## Latest bug review
 
 **67 Node tests and 32 Chromium tests pass**, including 100 concurrent channel players in local Wrangler D1/R2, the existing 100-player fleet waves, weather request coalescing and corrupt/incomplete-manifest rejection. Syntax and whitespace checks pass. The Worker deployment dry-run passed for the booking-authoring update. The prior dependency audit reported **0 known vulnerabilities** in the installed lockfile.

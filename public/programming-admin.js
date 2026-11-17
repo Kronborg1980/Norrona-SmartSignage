@@ -79,14 +79,21 @@ root.createProgrammingUI=function(ctx){
   var targets=scope==='screen'?data.screens:scope==='channel'?data.channels:scope==='zone'?Array.from(new Set(data.screens.map(s=>s.zone))).sort().map(z=>({id:z,name:z})):[{id:'*',name:'All screens'}];
   clear(select);select.append(option('','Choose '+(scope==='channel'?'a playlist':'a destination')));targets.forEach(t=>select.append(option(t.id,t.name)));select.value=previous;if(select.selectedIndex<0)select.value='';
   select.disabled=!targets.length;$('plan-new-channel').classList.toggle('hidden',scope!=='channel');$('plan-new-channel').disabled=!data.programmingAvailable;
-  var target=select.value,detail=$('plan-detail');clear(detail);
+  var target=select.value,detail=$('plan-detail');clear(detail);$('view-plan').classList.toggle('has-target',!!target);
   if(!targets.length){detail.append(el('div',{class:'empty'},[el('h3',{text:scope==='screen'?'Pair a screen to get started':scope==='channel'?'Create a reusable channel':'No zones yet'}),el('p',{text:scope==='screen'?'Pair a display in Screens, or choose All screens to prepare content before pairing.':scope==='channel'?'Channels rotate content inside a layout area. For fullscreen playback, choose a screen instead.':'Create zones by editing a screen in Screens.'}),button(scope==='channel'?'+ New channel':'Manage screens',()=>scope==='channel'?newPlanChannel():ctx.show('screens'))]));return;}
   if(!target){
    var search=inp('','Find by name','search'),cards=el('div',{class:'destination-cards'});search.setAttribute('aria-label','Find a screen or playlist');
-   function draw(){clear(cards);var found=targets.filter(t=>t.name.toLowerCase().includes(search.value.toLowerCase()));found.forEach(t=>cards.append(button(t.name,()=>{select.value=t.id;renderPlan();})));if(!found.length)cards.append(el('p',{text:'No matches. Try another name.'}));}search.oninput=draw;draw();
+   function meta(t){
+    if(scope==='screen'){var st=core.screenStatus(t,Date.now());return {text:t.zone+' · '+st,state:st==='Online'?'online':st==='Disabled'?'disabled':'offline'};}
+    if(scope==='zone'){var n=data.screens.filter(x=>x.zone===t.id).length;return {text:n+' screen'+(n===1?'':'s'),state:''};}
+    if(scope==='channel'){var n=data.bookings.filter(b=>b.scope==='channel'&&b.target===t.id).length;return {text:n+' item'+(n===1?'':'s'),state:''};}
+    return {text:data.screens.length+' screen'+(data.screens.length===1?'':'s'),state:''};
+   }
+   function draw(){clear(cards);var found=targets.filter(t=>t.name.toLowerCase().includes(search.value.toLowerCase()));found.forEach(t=>{var m=meta(t);cards.append(el('button',{class:'secondary dest-card',onclick:()=>{select.value=t.id;renderPlan();}},[el('strong',{text:t.name}),el('small',{class:m.state?'dot '+m.state:'',text:m.text}),el('span',{class:'dest-go','aria-hidden':'true',text:'›'})]));});if(!found.length)cards.append(el('p',{text:'No matches. Try another name.'}));}search.oninput=draw;draw();
    detail.append(el('h3',{text:'Choose '+(scope==='channel'?'a playlist':'where to play')}),search,cards);return;
   }
   var destination=targets.find(t=>t.id===target),screen=scope==='screen'&&destination;
+  var back=button('← '+(scope==='channel'?'All playlists':scope==='zone'?'All groups':'All screens'),()=>{select.value='';renderPlan();});back.className='back-link';if(scope!=='all')detail.append(back);
   var add=button('Add content',()=>schedule(null,{scope,target}));add.className='primary';add.disabled=!data.programmingAvailable;
   var actions=el('div',{class:'card-actions'},[add]);
   if(screen){actions.append(button('Preview screen',()=>ctx.previewScreen(screen)),button('Change default layout',()=>ctx.editScreen(screen)));}
