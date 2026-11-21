@@ -53,7 +53,7 @@ function validateWidgets(input,orientation='landscape') {
    fontFamily:['Arial','Helvetica','Verdana','Tahoma','Trebuchet MS','Times New Roman','Georgia','Courier New','Impact','Comic Sans MS','Inter','Roboto','Open Sans','Lato','Montserrat','Poppins','Raleway','Noto Sans'].includes(w.fontFamily)?w.fontFamily:'Arial',
    bold:w.bold===true,italic:w.italic===true,underline:w.underline===true,
    lineHeight:clamp(w.lineHeight,0.8,3,1.16),letterSpacing:clamp(w.letterSpacing,-5,30,0),verticalAlign:['top','middle','bottom'].includes(w.verticalAlign)?w.verticalAlign:'middle',opacity:clamp(w.opacity,0,1,1),
-   fontSize:clamp(w.fontSize,10,300,48),align:['left','center','right'].includes(w.align)?w.align:'left',fit:['cover','contain'].includes(w.fit)?w.fit:'contain',radius:clamp(w.radius,0,200,0),speed:clamp(w.speed,5,180,40)};
+   fontSize:clamp(w.fontSize,10,300,48),align:['left','center','right'].includes(w.align)?w.align:'left',fit:['cover','contain'].includes(w.fit)?w.fit:'contain',radius:clamp(w.radius,0,200,0),speed:clamp(w.speed,5,180,40),sound:w.type==='video'&&w.sound===true};
  });
 }
 function mapLayout(l) {return {...l,widgets:JSON.parse(l.widgets_json),widgets_json:undefined};}
@@ -223,6 +223,7 @@ async function playerRoute(req,env,url) {
   const capabilities=String(req.headers.get('X-Player-Capabilities')||'').split(',').map(x=>x.trim());
   if(programming&&!capabilities.includes('channels-v1'))return error('Update the player before using channels and bookings',409);
   if(programming?.channel_layouts&&!capabilities.includes('channel-layouts-v1'))return error('Update the player before using layered channel bookings',409);
+  if(programming?.booking_repeat&&!capabilities.includes('booking-repeat-v1'))return error('Update the player before using repeating content',409);
   if(programming?.layouts)layouts=programming.layouts;
   const refs=new Set();
   for(const w of [...layouts.flatMap(l=>l.widgets),...(programming?.content||[]).map(c=>c.widget)]){

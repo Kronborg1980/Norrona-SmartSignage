@@ -234,6 +234,7 @@ function renderInspector(){var c=$('inspector');clear(c);var w=editing.widgets.f
   }catch(e){notify(e.message,true);}finally{upload.disabled=false;upload.value='';}};
   c.append(labeled('Upload '+w.type,upload));c.append(el('p',{class:'muted',text:'Use a link, select library media, or upload here (max 25 MB). Uploaded media can play offline after sync; external links need network.'}));
   var fit=el('select',{},[option('contain','Show whole media'),option('cover','Fill and crop')]);fit.value=w.fit||'contain';fit.onchange=()=>{w.fit=fit.value;renderCanvas();};c.append(labeled('Media scaling',fit));
+  if(w.type==='video'){var sound=el('input',{type:'checkbox'});sound.checked=w.sound===true;sound.onchange=()=>{w.sound=sound.checked;};c.append(el('label',{class:'checkline'},[sound,' Play with sound']),el('p',{class:'muted',text:'Sound plays on the screen. If a display blocks sound, the video plays muted.'}));}
   c.append(el('button',{class:'secondary',text:'Fill canvas',onclick:()=>{w.x=0;w.y=0;w.w=editing.orientation==='portrait'?1080:1920;w.h=editing.orientation==='portrait'?1920:1080;renderEditor();}}));
  }
  if(['text','ticker','clock'].includes(w.type)){

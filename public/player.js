@@ -120,7 +120,7 @@ function renderEntries(job,at,jobs){
    var wrap=create('div','ticker');var span=create('span','',w.text);span.style.animationDuration=Math.max(8,(w.text.length+40)*100/w.speed/2)+'s';wrap.append(span);elem.append(wrap);
   }else if(w.type==='image'||w.type==='video'){
    var url=assets[w.src]||(w.src&&w.src.charAt(0)==='/'?endpoint(w.src):w.src);if(!url)return;var m=create(w.type==='image'?'img':'video');m.src=url;m.style.objectFit=w.fit;m.style.width='100%';m.style.height='100%';
-   if(w.type==='video'){m.autoplay=true;m.muted=true;m.loop=true;m.playsInline=true;m.setAttribute('playsinline','');m.addEventListener('error',()=>state('Video playback error'));m.play().catch(()=>state('Video autoplay blocked'));}
+   if(w.type==='video'){var sound=w.sound===true;m.autoplay=true;m.muted=!sound;if(sound)m.volume=1;m.loop=true;m.playsInline=true;m.setAttribute('playsinline','');m.addEventListener('error',()=>state('Video playback error'));m.play().catch(()=>{if(!sound)return state('Video autoplay blocked');m.muted=true;m.play().then(()=>state('Video sound blocked by the display; playing muted')).catch(()=>state('Video autoplay blocked'));});}
    elem.append(m);
   }job.parent.append(elem);
   if(previous)removeRecord(previous,job.parent);
@@ -148,7 +148,7 @@ function showPairCode(code){
 async function pairingStart(){try{show('pair-screen');var r=await fetch(endpoint('/api/player/pair/start'),{method:'POST'});if(!r.ok)throw Error('Pairing service unavailable');var j=await r.json();pairCode=j.code;showPairCode(pairCode);$('pair-status').textContent='Waiting for administrator approval';$('try-again').classList.add('hidden');clearInterval(pairTimer);pairTimer=setInterval(pairingPoll,4000);}catch(e){state('Pairing unavailable');$('pair-status').textContent=e.message;$('try-again').classList.remove('hidden');}}
 async function pairingPoll(){if(!pairCode||busy)return;busy=true;try{var r=await fetch(endpoint('/api/player/pair/status?code='+encodeURIComponent(pairCode)),{cache:'no-store'});if(r.status===410){clearInterval(pairTimer);$('pair-status').textContent='Code expired';$('try-again').classList.remove('hidden');return;}if(!r.ok)throw Error('Pair status failed');var j=await r.json();if(j.paired){credentials={id:j.screen_id,token:j.token};store(credKey,credentials);pairCode='';clearInterval(pairTimer);state('Paired');show('empty-state');setTimeout(sync,0);}}catch(e){state('Waiting for connection');}finally{busy=false;}}
 $('try-again').onclick=pairingStart;
-async function sync(){if(!validCred(credentials)||busy)return;busy=true;lastSync=Date.now();try{var h={'X-Player-ID':credentials.id,'X-Player-Token':credentials.token,'X-Player-Capabilities':'channels-v1,channel-layouts-v1'};if(lastEtag)h['If-None-Match']=lastEtag;var r=await fetch(endpoint('/api/player/sync'),{method:'POST',headers:h,cache:'no-store'});
+async function sync(){if(!validCred(credentials)||busy)return;busy=true;lastSync=Date.now();try{var h={'X-Player-ID':credentials.id,'X-Player-Token':credentials.token,'X-Player-Capabilities':'channels-v1,channel-layouts-v1,booking-repeat-v1'};if(lastEtag)h['If-None-Match']=lastEtag;var r=await fetch(endpoint('/api/player/sync'),{method:'POST',headers:h,cache:'no-store'});
  if(r.status===401){state('Device revoked — re-pair required');return;}
  if(r.status===304){state('Online · up to date');return;}
  if(!r.ok)throw Error('Sync HTTP '+r.status);var j=await r.json();await activate(j,r.headers.get('ETag')||'');

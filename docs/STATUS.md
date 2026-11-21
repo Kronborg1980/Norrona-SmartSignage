@@ -7,7 +7,11 @@
 - **Delete a layout in Design Studio:** a new Delete button removes the selected layout after confirmation. Layouts still used as a screen default, a layout rule or a booking are refused with a list of where they are used (the Worker also still rejects these).
 - **Playlist or full screen:** when a screen already plays a playlist (booked full layout or default layout with a playlist area), Add content asks whether the new content goes **In playlist "…"** (default; it takes its turn between the playlist items) or **Full screen** (its own booking on the screen, taking turns with the playlist, or taking over with a higher priority).
 
-No migration and no API change. `npm test` passes; the guide and Studio flows were checked in Chromium against the Worker with SQLite. `tests/browser/simple-scheduling.spec.js` was updated for the tick-list picker; the Playwright suite was not run here.
+- **Full screen takes over, with repeat and sound (e.g. a safety video):** choosing **Full screen · takes over** gives the booking a priority above everything else on that screen, so the playlist pauses while it plays. Under **When**, **Repeat** (every 5 min – 2 hours) makes it play for its seconds at the start of every interval, counted from the window start (10:00, 10:15 …), after which normal content continues. For an uploaded video the length is filled in automatically. **Play video with sound** (also in Studio and the content editor) unmutes the video; if a display blocks sound, it plays muted.
+  - Bookings get an optional `repeat_minutes`. The column is added the first time a repeating booking is saved (authenticated admin write), so no manual D1 migration is needed; reads and player sync never change the schema. Older clients that omit the field keep the stored value. Repeat is rejected inside playlists and when the playing time is not shorter than the interval.
+  - Players advertise `booking-repeat-v1`; a manifest with repeating bookings is refused (409) for older players, which keep their cached content. Hosted players pick up the new player on reload; **Tizen packages must be rebuilt** (`npm run prepare:tizen`) before using repeat.
+
+No API removals. `npm test` passes (69, including `tests/booking-repeat.test.js`); the guide and Studio flows were checked in Chromium against the Worker with SQLite. `tests/browser/simple-scheduling.spec.js` was updated for the tick-list picker; the Playwright suite was not run here.
 
 ## Simple screen setup · 17 November 2026
 
