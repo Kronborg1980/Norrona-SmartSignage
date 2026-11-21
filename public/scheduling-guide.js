@@ -167,9 +167,9 @@ root.createSchedulingGuide=function(ctx){
     const summary=el('div');function updateReview(){summary.replaceChildren(review());}body.addEventListener('input',updateReview);body.addEventListener('change',updateReview);updateReview();body.append(summary,el('p',{class:'muted',text:'Other screen or group rules can affect playback. Preview the screen after saving; offline screens may still show older content.'}));
    }
    if(step>0)body.append(button('← Back',()=>{if(!busy){step--;show();}}));
-   if(source==='saved'&&!placement&&choices.length<=1&&(!selected()||selected().kind!=='channel'))body.append(el('details',{class:'guide-advanced'},[el('summary',{text:'More editing tools'}),button('Advanced editor',()=>{
+   if(source==='saved'&&choices.length<=1&&(!selected()||selected().kind!=='channel'))body.append(el('details',{class:'guide-advanced'},[el('summary',{text:'More editing tools'}),button('Advanced editor',()=>{
     if(busy)return;
-    const draft=Object.assign({},s,{name:s.name||contentName()||'New booking'},selected()?{item_type:selected().kind,item_id:selected().id}:{});
+    const draft=Object.assign({},s,{name:s.name||contentName()||'New booking',repeat_minutes:repeat},selected()?{item_type:selected().kind,item_id:selected().id}:{});
     if(timing==='always')Object.assign(draft,{start_date:null,end_date:null,days:allDays.slice(),start_time:'00:00',end_time:'23:59'});
     ctx.advanced(item?draft:null,item?null:draft);
    })]));
