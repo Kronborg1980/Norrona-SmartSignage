@@ -1,5 +1,14 @@
 # Implementation status · 28 October 2026
 
+## Playlist, Studio and Screen content improvements · 21 November 2026
+
+- **Several items at once:** the Add content guide accepts several images/videos in one upload, and saved content is a tick list, so several items can be added in one go. Each becomes its own booking with consecutive order and the same timing. Retrying after a failed save does not upload, create or book an item twice. Editing an existing booking still selects exactly one item.
+- **No designs in playlists:** when adding to a playlist, saved designs and **Create a design** are hidden. Existing design bookings in a playlist can still be edited.
+- **Delete a layout in Design Studio:** a new Delete button removes the selected layout after confirmation. Layouts still used as a screen default, a layout rule or a booking are refused with a list of where they are used (the Worker also still rejects these).
+- **Playlist or full screen:** when a screen already plays a playlist (booked full layout or default layout with a playlist area), Add content asks whether the new content goes **In playlist "…"** (default; it takes its turn between the playlist items) or **Full screen** (its own booking on the screen, taking turns with the playlist, or taking over with a higher priority).
+
+No migration and no API change. `npm test` passes; the guide and Studio flows were checked in Chromium against the Worker with SQLite. `tests/browser/simple-scheduling.spec.js` was updated for the tick-list picker; the Playwright suite was not run here.
+
 ## Simple screen setup · 17 November 2026
 
 Adding a screen and putting something on it now takes a few taps. The player's pairing screen shows the 12-character code in groups of four and a QR code (bundled MIT `qrcode-generator` 2.0.4, cached offline and copied to the Tizen bundle). Scanning it opens the backoffice at `/?pair=CODE`; after login the "Add a screen" sheet has the code filled in, so the user only picks a name (quick chips) and Landscape/Portrait. Typed codes accept spaces, dashes and lowercase (normalised in the browser and the Worker). Screen content opens on large screen cards with an "Add a screen" card and Screens/Groups/All screens/Playlists chips; after pairing from there, the new screen opens directly. The content guide offers "Show it now, all the time" so the timing step can be skipped. Default layout moved under Screen settings. No migration; pairing security and token handling are unchanged.

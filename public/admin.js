@@ -144,7 +144,7 @@ function editScreen(s){var n=inp(s.name),zone=inp(s.zone),orient=el('select',{},
 // Layout editor
 function freshLayout(){return {id:null,name:'New layout',orientation:'landscape',background:'#071220',widgets:[]};}
 function bookingDesignState(){
- $('booking-design-banner').classList.toggle('hidden',!bookingDesign);$('layout-select').disabled=!!bookingDesign;$('new-layout').disabled=!!bookingDesign;
+ $('booking-design-banner').classList.toggle('hidden',!bookingDesign);$('layout-select').disabled=!!bookingDesign;$('new-layout').disabled=!!bookingDesign;$('delete-layout').disabled=!!bookingDesign;
  $('schedule-layout').classList.toggle('hidden',!!bookingDesign);
  $('save-layout').textContent=bookingDesign?'Save design & continue →':'Save layout →';
  if(bookingDesign)$('booking-design-name').textContent=bookingDesign.draft.name||'New booking';
@@ -166,6 +166,23 @@ $('booking-design-cancel').onclick=()=>finishBookingDesign();
 function renderLayoutOptions(){var select=$('layout-select'),id=editing&&editing.id;clear(select);select.append(option('','Select layout'));data.layouts.forEach(l=>select.append(option(l.id,l.name)));select.value=id||'';if(!editing){editing=data.layouts.length?JSON.parse(JSON.stringify(data.layouts[0])):freshLayout();renderEditor();select.value=editing.id||'';}}
 $('layout-select').onchange=e=>{editing=JSON.parse(JSON.stringify(data.layouts.find(x=>x.id===e.target.value)||freshLayout()));selected=null;renderEditor();};
 $('new-layout').onclick=()=>{editing=freshLayout();selected=null;$('layout-select').value='';renderEditor();};
+function layoutUses(id){
+ var uses=[];
+ data.screens.filter(s=>s.layout_id===id).forEach(s=>uses.push('default layout on screen "'+s.name+'"'));
+ data.schedules.filter(r=>r.layout_id===id).forEach(r=>uses.push('layout rule "'+(r.name||r.id)+'"'));
+ data.bookings.filter(b=>b.item_type==='layout'&&b.item_id===id).forEach(b=>{var t=b.scope==='all'?'all screens':((b.scope==='channel'?data.channels:b.scope==='screen'?data.screens:[]).find(x=>x.id===b.target)||{name:b.target}).name;uses.push('"'+b.name+'" on '+t);});
+ return uses;
+}
+$('delete-layout').onclick=async()=>{
+ if(bookingDesign||!editing)return;
+ if(!editing.id){if(!confirm('Discard this unsaved layout?'))return;editing=data.layouts.length?JSON.parse(JSON.stringify(data.layouts[0])):freshLayout();selected=null;renderLayoutOptions();renderEditor();return;}
+ var uses=layoutUses(editing.id);
+ if(uses.length)return notify('"'+editing.name+'" is still in use: '+uses.join('; ')+'. Remove it there first.',true);
+ if(!confirm('Delete the layout "'+editing.name+'"? This cannot be undone.'))return;
+ var btn=$('delete-layout');btn.disabled=true;
+ try{await api('/api/admin/layouts?id='+encodeURIComponent(editing.id),'DELETE');notify('Layout deleted');editing=null;selected=null;await refresh();renderLayoutOptions();}
+ catch(e){notify(e.message,true);}finally{btn.disabled=!!bookingDesign;}
+};
 async function saveLayout(schedule){
  if(!editing||$('save-layout').disabled)return;
  if(schedule&&!data.programmingAvailable){show('plan');return notify('Enable channels and bookings to schedule this design. Your unsaved layout is kept.',true);}
