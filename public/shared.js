@@ -59,7 +59,15 @@
     else if (mins < begin) return null;
     var anchor = new Date(day), date = anchor.toISOString().slice(0,10);
     if ((b.days || []).indexOf(anchor.getUTCDay()) < 0 || b.start_date && date < b.start_date || b.end_date && date > b.end_date) return null;
-    return day + begin * 60000;
+    var start = day + begin * 60000, every = Number(b.repeat_minutes) || 0;
+    // Repeating bookings play for their duration at the start of every interval,
+    // counted from the start of the time window (e.g. every 15 minutes from 00:00).
+    if (every > 0) {
+      var period = every * 60000, slot = start + Math.floor((ms - start) / period) * period;
+      if (ms - slot >= Math.max(1, Number(b.duration) || 10) * 1000) return null;
+      return slot;
+    }
+    return start;
   }
   function findContent(manifest, id) {
     var items = manifest.content || [];
@@ -168,7 +176,8 @@
       fontSize: Math.max(10, Math.min(300, Number(w.fontSize) || 48)),
       align: String(w.align || 'left'), fit: String(w.fit || 'contain'),
       radius: Math.max(0, Math.min(200, Number(w.radius) || 0)),
-      speed: Math.max(5, Math.min(180, Number(w.speed) || 40))
+      speed: Math.max(5, Math.min(180, Number(w.speed) || 40)),
+      sound: w.type === 'video' && w.sound === true
     };
   }
   var fonts = ['Arial','Helvetica','Verdana','Tahoma','Trebuchet MS','Times New Roman','Georgia','Courier New','Impact','Comic Sans MS','Inter','Roboto','Open Sans','Lato','Montserrat','Poppins','Raleway','Noto Sans'];

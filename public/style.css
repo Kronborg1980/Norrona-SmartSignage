@@ -241,3 +241,6 @@
 .help-tips p{margin:6px 0 0;color:#a8bdcf;font-size:13px;line-height:1.55}
 .help-go{margin-top:14px}
 @media(max-width:850px){.help-item>summary{font-size:16px;padding:17px 44px 17px 16px}.help-steps li{font-size:15px}.help-go{width:100%;justify-content:center}.help-links{flex-direction:column;gap:2px}.help-link{font-size:14px;padding:6px 0}}
+.saved-picker{border:1px solid #293b50;border-radius:10px;padding:10px 14px;margin:6px 0;display:grid;gap:10px;max-height:320px;overflow:auto}.saved-picker legend{font-size:12px;color:#a8bdcf;padding:0 6px}.saved-group{display:grid;gap:2px}.saved-group strong{font-size:11px;letter-spacing:.08em;color:#7898b1;text-transform:uppercase;margin-top:4px}.saved-group .checkline{margin:4px 0;min-height:34px}
+.upload-list{list-style:none;padding:0;margin:0;display:grid;gap:4px}.upload-list li{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#122235;border:1px solid #273b4e;border-radius:7px;padding:4px 4px 4px 10px;font-size:12px;overflow-wrap:anywhere}
+.guide-label{margin:10px 0 0;color:#a8bdcf;font-size:13px}.guide-placement{margin-top:8px}

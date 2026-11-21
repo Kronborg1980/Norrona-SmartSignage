@@ -3,7 +3,23 @@ const ready=new WeakMap();
 const fail=(message,status=400)=>{throw Object.assign(new Error(message),{status});};
 const validId=id=>typeof id==='string'&&/^[a-zA-Z0-9_-]{3,50}$/.test(id);
 const mapContent=c=>({...c,widget:JSON.parse(c.widget_json),widget_json:undefined});
-export const mapBooking=b=>({...b,days:JSON.parse(b.days_json),days_json:undefined,enabled:!!b.enabled});
+export const mapBooking=b=>({...b,days:JSON.parse(b.days_json),days_json:undefined,enabled:!!b.enabled,repeat_minutes:Number(b.repeat_minutes)||0});
+// The optional repeat column is added the first time someone saves a repeating
+// booking. Existing deployments therefore need no manual D1 migration, and
+// reads/player sync never change the schema.
+const repeatReady=new WeakMap();
+async function repeatColumn(env,create){
+ if(repeatReady.get(env.DB)===true)return true;
+ const cols=(await env.DB.prepare('PRAGMA table_info(bookings)').all()).results.map(c=>c.name);
+ let has=cols.includes('repeat_minutes');
+ if(!has&&create){
+  try{await env.DB.prepare('ALTER TABLE bookings ADD COLUMN repeat_minutes INTEGER NOT NULL DEFAULT 0').run();}
+  catch(e){if(!/duplicate column/i.test(String(e&&e.message)))throw e;}
+  has=true;
+ }
+ if(has)repeatReady.set(env.DB,true);
+ return has;
+}
 export async function programmingReady(env) {
  if(!ready.has(env.DB))ready.set(env.DB,(async()=>{
   const rows=await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('channels','content','bookings')").all();
@@ -139,10 +155,18 @@ export async function programmingRoute(req,env,url,{body,response,rand,validateW
  if(!Number.isSafeInteger(duration)||duration<1||duration>Number.MAX_SAFE_INTEGER/1000)fail('Duration must be a positive whole number of seconds');
  if(!Number.isSafeInteger(position)||position<0)fail('Order must be a positive whole number or zero');
  if(!Number.isInteger(priority)||priority<0||priority>1000)fail('Priority must be 0–1000');
+ let repeat=0,hasRepeat=await repeatColumn(env,false);
+ if(j.repeat_minutes===undefined||j.repeat_minutes===null){if(hasRepeat){const old=await env.DB.prepare('SELECT repeat_minutes FROM bookings WHERE id=?').bind(id).first();repeat=Number(old&&old.repeat_minutes)||0;}}
+ else{repeat=Number(j.repeat_minutes);if(!Number.isInteger(repeat)||repeat<0||repeat>1440)fail('Repeat must be 0–1440 minutes');}
+ if(repeat&&j.scope==='channel')fail('Repeating content plays full screen. Choose a screen, group or all screens.');
+ if(repeat&&duration>=repeat*60)fail('Seconds it plays must be shorter than the repeat interval');
+ if(repeat&&!hasRepeat)hasRepeat=await repeatColumn(env,true);
  await checkVideoCapacity(env,{booking:{id,scope:j.scope,target,item_type:j.item_type,item_id:j.item_id,enabled:j.enabled!==false}});
  await env.DB.prepare(`INSERT INTO bookings(id,name,scope,target,item_type,item_id,start_date,end_date,days_json,start_time,end_time,duration,position,priority,enabled,updated_at)
  VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name,scope=excluded.scope,target=excluded.target,item_type=excluded.item_type,item_id=excluded.item_id,start_date=excluded.start_date,end_date=excluded.end_date,days_json=excluded.days_json,start_time=excluded.start_time,end_time=excluded.end_time,duration=excluded.duration,position=excluded.position,priority=excluded.priority,enabled=excluded.enabled,updated_at=excluded.updated_at`)
- .bind(id,name,j.scope,target,j.item_type,j.item_id,start,end,JSON.stringify(days),j.start_time,j.end_time,duration,position,priority,j.enabled===false?0:1,stamp).run();return response({id});
+ .bind(id,name,j.scope,target,j.item_type,j.item_id,start,end,JSON.stringify(days),j.start_time,j.end_time,duration,position,priority,j.enabled===false?0:1,stamp).run();
+ if(hasRepeat)await env.DB.prepare('UPDATE bookings SET repeat_minutes=? WHERE id=?').bind(repeat,id).run();
+ return response({id});
 }
 export async function screenBookings(env,screen) {
  if(!await programmingReady(env))return [];
@@ -179,5 +203,5 @@ export async function manifestProgramming(env,layouts,directBookings) {
  // Check the read graph too: a broken/cyclic database must never replace the
  // player's previous verified manifest, including after concurrent admin edits.
  validateProgrammingGraph(allLayouts,channels,bookings,new Map(content.map(c=>[c.id,{type:c.widget.type}])),503);
- return {channels,bookings,content,layouts:allLayouts,...(bookings.some(b=>b.scope==='channel'&&b.item_type==='layout')?{channel_layouts:1}:{})};
+ return {channels,bookings,content,layouts:allLayouts,...(bookings.some(b=>b.scope==='channel'&&b.item_type==='layout')?{channel_layouts:1}:{}),...(bookings.some(b=>b.repeat_minutes>0)?{booking_repeat:1}:{})};
 }
